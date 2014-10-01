@@ -1,0 +1,91 @@
+;--------------------------------------------------------------
+; Fundamental constants - SI values converted to cgs units
+;
+; JRG/UCB 1998/10/1 - jrg@astro.berkeley.edu
+;
+; Physical constants are 1998 CODATA recommendations
+;
+; Astronomical constants are IAU 1976
+;
+;---------------------------------------
+; Set up a system of units - cgs
+;---------------------------------------
+;
+cm     = 1.0d0		; unit of length
+gram   = 1.0d0		; unit of mass
+second = 1.0d0		; unit of time
+erg    = 1.0d0		; unit of energy
+kelvin = 1.0d0		; unit of temperature
+;
+;----------------------------
+; prefixes
+;
+giga  = 1d9
+mega  = 1d6
+kilo  = 1d3
+centi = 1d-2
+milli = 1d-3
+micro = 1d-6
+nano  = 1d-9
+pico  = 1d-12
+;
+;---------------------------------------
+; fundamental constants
+;
+hplanck      = 6.62606876d-27    ; planck constant
+clight       = 2.99792458d10    ; speed of light
+kboltz	     = 1.3806503d-16	; Boltzmann constant
+stefan_boltz = 5.67040d-5       ; Stefan-Boltzman constant
+mproton      = 1.67262158d-24	; proton mass
+melectron    = 9.10938188d-28	; electron mass
+qesu         = 4.803242d-10	; e.s.u.
+qemu         = 1.602176462d-20  ; e.m.u
+bigg         = 6.673d-8		; Newton's constant
+bohrrad      = 5.2918d-9	; cm 
+;
+;---------------------------------------
+; Conversion factors
+;
+; length
+;
+km       = 1.0d+5 * cm  ; 
+meter    = 1.0d+2 * cm	; 
+inch     = 2.54   * cm	;
+mm	 = 0.1    * cm	;
+micron   = 1.0d-4 * cm  ; 
+angstrom = 1d-8   * cm	; 
+
+;---------------------------------------
+;
+; energy and power conversion factors
+;
+joule = 1d7*erg		
+watt  = 1d7*erg/second
+electronvolt = 1.602176462d-12*erg
+rydberg = 10973731.568*meter^(-1.)
+;-----------------------------------
+; astronomical constants
+;
+au     = 499.004782*second*clight ; the astronomical unit
+arcsec = 1.0d0/206265.0           ; radains
+parsec = au/arcsec	          ; cm
+minute = 60. 			  ; seconds
+hour   = 60. * 60.		  ; seconds
+day    = 8.64d4		          ; seconds
+year   = 365.2425*day	          ; seconds
+
+lsun   = 3.826d33                 ; erg/s
+msun   = 1.9891d33                ; gm
+rsun   = 6.9598d10		  ; cm
+tsun   = 5770.0			  ; kelvin
+lstar  = 3.4d10*lsun              ; l-star for Schecter luminosity function
+mvsun  = -26.7			  ; apparent V mag of sun
+mbstar = -21.0d0                  ; M_B* 
+;mbstar = -20.6                   ; M_B* Mihalis & Binney
+jansky  = 1.0d-23		  ; erg/s/cm/cm/Hz
+mearth  = 5.976d27		  ; earth mass in gm
+mjupiter = 1898.8d27              ; jupiter in gm
+rjupiter = 70850*km		  ; jupiters equatorial radius
+;------------------------------
+; other units of length
+;
