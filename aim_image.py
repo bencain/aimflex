@@ -1,4 +1,5 @@
 import numpy as np
+import astropy.modeling as am
 
 class AIMImage:
 	"""
@@ -7,8 +8,9 @@ class AIMImage:
 	
 	def __init__(self,images):
 		"""
-			Return an AIMImage object based off the tuple of images: data, window, and 
-			psf.  Initial guess parameters are taken from the data image
+			Return an AIMImage object based off the tuple of images: data, 
+			window, and psf.  Initial guess parameters are taken from the 
+			data image.
 		"""
 		
 		# Assumes (data, window, psf) format
@@ -62,3 +64,65 @@ class AIMImage:
 		print np.log10(flux),c1,c2,alpha,e1,e2
 		
 		return 0
+		
+		
+class AIMModel(am.Fittable2DModel):
+
+	logI  = am.Parameter(default=1.)
+	alpha = am.Parameter(default=1.)
+	c1 = 	am.Parameter(default=0.)
+	c2 = 	am.Parameter(default=0.)
+	E1 = 	am.Parameter(default=0.)
+	E2 = 	am.Parameter(default=0.)
+	g1 = 	am.Parameter(default=0.)
+	g2 = 	am.Parameter(default=0.)
+	F1 = 	am.Parameter(default=0.)
+	F2 = 	am.Parameter(default=0.)
+	G1 = 	am.Parameter(default=0.)
+	G2 = 	am.Parameter(default=0.)
+	
+			
+	@staticmethod
+	def evaluate(x,y,logI,alpha,c1,c2,E1,E2,g1,g2,F1,F2,G1,G2):
+	
+		# Need to get Gaussian2D parameters from my parameters
+		amp = np.power(10.,logI)	# Gaussian amplitude
+		emag=np.sqrt(E1**2 + E2**2) # Ellipticity magnitude
+		q=(1-emag)/(1+emag) 		# Axis ratio b/a
+		pa=0.5*np.arctan2(E2,E1) 	# Position angle
+		a=alpha/np.sqrt(q)
+		b=a*q
+		
+		gmodel=am.models.Gaussian2D(amplitude=amp,x_mean=0.,y_mean=0.,
+								  x_stddev=a,y_stddev=b,theta=pa)
+	
+	
+		beta0=c1+1j*c2
+		E=E1+1j*E2
+		g=g1+1j*g2
+		F=F1+1j*F2
+		G=G1+1j*G2
+		
+		coo = x+1j*y - beta0
+		coo_c = np.conj(coo)
+		
+		beta = coo - g*coo_c - 0.25*np.conj(F)*coo**2 \
+				- 0.5*F*coo*coo_c - 0.25*G*coo_c**2 #- beta0 
+				
+		# Now for the model:
+		return gmodel(beta.real,beta.imag)
+		
+		
+		
+		
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

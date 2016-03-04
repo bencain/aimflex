@@ -1,0 +1,10 @@
+*.dvi
+*.log
+*.out
+*.aux
+.DS_Store
+pyraf/**
+**/login.cl
+*.pyc
+
+proj_notes.txt
