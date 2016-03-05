@@ -8,8 +8,8 @@ class AIMGaussian(am.Fittable2DModel):
 	alpha = am.Parameter(default=1.)
 	c1 = 	am.Parameter(default=0.)
 	c2 = 	am.Parameter(default=0.)
-	E1 = 	am.Parameter(default=0.)
-	E2 = 	am.Parameter(default=0.)
+	E1 = 	am.Parameter(default=0.,min=-0.7,max=0.7)
+	E2 = 	am.Parameter(default=0.,min=-0.7,max=0.7)
 	g1 = 	am.Parameter(default=0.)
 	g2 = 	am.Parameter(default=0.)
 	F1 = 	am.Parameter(default=0.)
@@ -42,8 +42,8 @@ class AIMGaussian(am.Fittable2DModel):
 		coo = x+1j*y - beta0
 		coo_c = np.conj(coo)
 		
-		beta = coo - g*coo_c - 0.25*np.conj(F)*coo**2 \
-				- 0.5*F*coo*coo_c - 0.25*G*coo_c**2 #- beta0 
+		beta = coo - g*coo_c - np.conj(F)*coo**2 \
+				- 2*F*coo*coo_c - G*coo_c**2 #- beta0 
 				
 		# Now for the model:
 		return gmodel(beta.real,beta.imag)
