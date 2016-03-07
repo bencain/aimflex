@@ -28,7 +28,7 @@ mod=aim.AIMGaussian(logI=0.,alpha=6.,c1=0.,c2=0.,g1=-0.6,F1=-0.05,G1=0.15)
 
 fitter=fitting.LevMarLSQFitter()
 
-fit = fitter(mod,x,y,z=data)
+fit = fitter(mod,x,y,data)
 print fit
 
 
@@ -37,3 +37,4 @@ hdu3.writeto('fit.fits',clobber=True)
 
 hdu4 = fits.PrimaryHDU(fit(x,y)-data)
 hdu4.writeto('res.fits',clobber=True)
+
