@@ -66,14 +66,73 @@ class AIMGaussian(am.Fittable2DModel):
 		return gmodel(beta.real,beta.imag)
 
 
-def initial_parameters(image):
+class AIMGaussian_NEW(am.Fittable2DModel):
 	"""
-		A function for creating Gaussian model initial parameters from the data.
+		This class implements an elliptical Gaussian source plane model lensed 
+		by shear and flexion.  Parameters included:
+			logI	- peak surface brightness
+			A		- size 
+			c1		- image plane x location for beta=0
+			c2		- image plane y location for beta=0
+			S1		- + polarized shear+ellipticity
+			S2		- x polarized shear+ellipticity
+			T1		- First 1-flexion x
+			T2		- First 1-flexion y
+			U1		- Second 1-Flexion x
+			U2		- Second 1-Flexion y
+			V1		- 3-Flexion x
+			V2		- 3-Flexion y
+	"""
+
+	logI  = am.Parameter(default=1.)
+	A  =	am.Parameter(default=1.)
+	c1 = 	am.Parameter(default=0.)
+	c2 = 	am.Parameter(default=0.)
+	S1 = 	am.Parameter(default=0.,min=-0.7,max=0.7)
+	S2 = 	am.Parameter(default=0.,min=-0.7,max=0.7)
+	T1 = 	am.Parameter(default=0.)
+	T2 = 	am.Parameter(default=0.)
+	U1 = 	am.Parameter(default=0.)
+	U2 = 	am.Parameter(default=0.)
+	V1 = 	am.Parameter(default=0.)
+	V2 = 	am.Parameter(default=0.)
+	
+			
+	@staticmethod
+	def evaluate(x,y,logI,A,c1,c2,S1,S2,T1,T2,U1,U2,V1,V2):
+	
+		# Need to get Gaussian2D parameters from my parameters
+		amp = np.power(10.,logI)	# Gaussian amplitude
+				
+		gmodel=am.models.Gaussian2D(amplitude=amp,x_mean=0.,y_mean=0.,
+								  x_stddev=A,y_stddev=A,theta=0.)
+	
+	
+		beta0=c1+1j*c2
+		S=S1+1j*S2
+		T=T1+1j*T2
+		U=U1+1j*U2
+		V=V1+1j*V2
+		
+		coo = x+1j*y - beta0
+		coo_c = np.conj(coo)
+		
+		beta = coo - S*coo_c - np.conj(T)*coo**2 \
+				- 2*U*coo*coo_c - V*coo_c**2 
+				
+		# Now for the model:
+		return gmodel(beta.real,beta.imag)
+
+
+def set_gaussian_pars(image,gmodel):
+	"""
+		A function for creating Gaussian model initial parameters from the data and
+		setting them into the model object.
 	"""
 	
 	cts = calc_moments(image)
-	ctr = [calc_moments(image,xord=1),
-		   calc_moments(image,yord=1)]
+	ctr = [calc_moments(image,xord=1)/cts,
+		   calc_moments(image,yord=1)/cts]
 	Q11 = calc_moments(image,xord=2)/cts
 	Q22 = calc_moments(image,yord=2)/cts
 	Q12 = calc_moments(image,xord=1,yord=1)/cts
@@ -81,6 +140,17 @@ def initial_parameters(image):
 	m1=Q11-Q12**2/Q22
 	m2=Q22-Q12**2/Q11
 	m3=-Q12/(Q11*Q22-Q12**2)
+	
+	epars = convert_epars([m1,m2,m3],mi_to_pol=True)
+	
+	logI=np.log10(cts/(2*np.pi*epars[0]**2))
+	
+	gmodel.logI = logI
+	gmodel.c1=ctr[0]
+	gmodel.c2=ctr[1]
+	gmodel.alpha=epars[0]
+	gmodel.E1=epars[1]
+	gmodel.E2=epars[2]
 	
 	
 	
@@ -145,7 +215,7 @@ def convert_epars(epars,
 			 r^2 = ((x-X_c)^2/M1^2 + (y-Y_c)^2/M2 + 2*M3*(x-X_c)*(y-Y_c))
 	"""
 	outpars=np.copy(epars)
-	if not isinstance(epars,collections.Sequence):
+	if np.isscalar(epars):
 		print "aim.convert_epars requires a 3 element iterable input."
 		print " -> this looks like a scalar: ",epars
 		return outpars
@@ -159,36 +229,42 @@ def convert_epars(epars,
 		print " -> this looks like too many: ",epars
 		return outpars
 	
-	conds=[
-	if (not ae_to_pol) and pol_to_mi=False,
-                  mi_to_ae=False,  pol_to_ae=False,
-                  mi_to_pol=False, ae_to_mi=False
+	conds=np.array([ae_to_pol, pol_to_mi, mi_to_ae, 
+					pol_to_ae, mi_to_pol, ae_to_mi],dtype=bool)
+					
+	if len(conds[conds]) == 0:
+		print "Doesn't look like a conversion was selected."
+		return outpars
+	elif len(conds[conds]) > 1:
+		print "Looks like multiple conversions were selected."
+		return outpars
+
 
 	if ae_to_pol:
-	   A=epars[0]
-	   eps=epars[1]
-	   xi=epars[2]
-
-	   alpha=A*np.sqrt(eps)
-
+		A=epars[0]
+		eps=epars[1]
+		xi=epars[2]
+		
+		alpha=A*np.sqrt(eps)
+		
 		# This is
 		# E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 )
 		# eplus= ((1d)-eps^2)*cos((2d)*xi)/((1d)+eps^2)
 		# ecross=((1d)-eps^2)*sin((2d)*xi)/((1d)+eps^2)
-
+		
 		# E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 +2sqrt( Q11*Q22 - Q12^2 ) )
 		
 		eplus= (1.-eps)*np.cos(2.*xi)/(1.+eps)
 		ecross=(1.-eps)*np.sin(2.*xi)/(1.+eps)
+		
+		outpars[0:3]=alpha,eplus,ecross
 
-   		outpars[0:3]=alpha,eplus,ecross
+	elif pol_to_mi:
+		alpha=epars[0]
+		eplus=epars[1]
+		ecross=epars[2]
 
-	else if pol_to_mi:
-	   alpha=epars[0]
-	   eplus=epars[1]
-	   ecross=epars[2]
-
-	   emag=sqrt(eplus^2+ecross^2)
+		emag=np.sqrt(eplus**2+ecross**2)
 
 		# This is
 		# E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 )
@@ -201,57 +277,49 @@ def convert_epars(epars,
 		m2=alpha**2*(1. - emag**2)/(1. + emag**2 + 2.*eplus)
 		m3=-2.*ecross/(alpha**2*(1. -emag**2))
 
-		outpars[ellipse_pars]=[m1,m2,m3]
-endif
+		outpars[0:3]=m1,m2,m3
 
+	elif pol_to_ae:
+		alpha=epars[0]
+		eplus=epars[1]
+		ecross=epars[2]
+		emag=np.sqrt(eplus**2+ecross**2)
 
-if keyword_set(pol_to_ae) then begin
-   alpha=pars[ellipse_pars[0]]
-   eplus=pars[ellipse_pars[1]]
-   ecross=pars[ellipse_pars[2]]
-   emag=sqrt(eplus^2+ecross^2)
+		# This is
+		# E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 )
+		# eps=sqrt((1d -emag)/(1d +emag))
+		# A=alpha/sqrt(eps)
+		# xi=0.5d*atan(ecross,eplus)
+		
+		# E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 +2sqrt( Q11*Q22 - Q12^2 ) )
+		eps=(1. - emag)/(1. + emag)
+		A=alpha/np.sqrt(eps)
+		xi=0.5*np.arctan2(ecross,eplus)
 
-; This is
-;  E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 )
-;   eps=sqrt((1d -emag)/(1d +emag))
-;   A=alpha/sqrt(eps)
-;   xi=0.5d*atan(ecross,eplus)
+		outpars[0:3]=A,eps,xi
 
-; This is
-;  E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 +2sqrt( Q11*Q22 - Q12^2 ) )
-   eps=(1d - emag)/(1d + emag)
-   A=alpha/sqrt(eps)
-   xi=0.5d*atan(ecross,eplus)
+	elif mi_to_pol:
+		m1=epars[0]
+		m2=epars[1]
+		m3=epars[2]
 
-   outpars[ellipse_pars]=[A,eps,xi]
+		# This is
+		# E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 )
+		# alpha=(m1*m2/(1d - m1*m2*m3^2))^(0.25d)
+		# eplus=(m1-m2)/(m1+m2)
+		# ecross=-2d*m1*m2*m3/(m1+m2)
 
-endif
+		# E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 +2sqrt( Q11*Q22 - Q12^2 ) )
+		alpha=np.power(m1*m2/(1. - m1*m2*m3**2),0.25)
+		eplus=(m1 - m2)/(m1 + m2 + 2.*np.sqrt(m1*m2 - (m1*m2*m3)**2))
+		ecross=-2.*m1*m2*m3/(m1 + m2 + 2*np.sqrt(m1*m2 - (m1*m2*m3)**2))
 
-if keyword_set(mi_to_pol) then begin
-   m1=pars[ellipse_pars[0]]
-   m2=pars[ellipse_pars[1]]
-   m3=pars[ellipse_pars[2]]
+		outpars[0:3]=alpha,eplus,ecross
 
-; This is
-;  E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 )
-;   alpha=(m1*m2/(1d - m1*m2*m3^2))^(0.25d)
-;   eplus=(m1-m2)/(m1+m2)
-;   ecross=-2d*m1*m2*m3/(m1+m2)
+	elif ae_to_mi:
+		outpars=convert_epars(convert_epars(epars,ae_to_pol=True),pol_to_mi=True)
 
-; This is
-;  E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 +2sqrt( Q11*Q22 - Q12^2 ) )
-   alpha=(m1*m2/(1d - m1*m2*m3^2))^(0.25d)
-   eplus=(m1 - m2)/(m1 + m2 + 2d*sqrt(m1*m2 - (m1*m2*m3)^2))
-   ecross=-2d*m1*m2*m3/(m1 + m2 + 2d*sqrt(m1*m2 - (m1*m2*m3)^2))
+	elif mi_to_ae:
+		outpars=convert_epars(convert_epars(epars,mi_to_pol=True),pol_to_ae=True)
 
-   outpars[ellipse_pars]=[alpha,eplus,ecross]
-
-endif
-
-if keyword_set(ae_to_mi) then $
-   outpars=convert_epars(convert_epars(pars,/ae_to_pol),/pol_to_mi)
-
-if keyword_set(mi_to_ae) then $
-   outpars=convert_epars(convert_epars(pars,/mi_to_pol),/pol_to_ae)
-
-return, outpars
+	return outpars
