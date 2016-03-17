@@ -8,8 +8,11 @@ ngrid=101
 oned=np.linspace(-(ngrid-1)/2,(ngrid-1)/2,ngrid)
 x,y =np.meshgrid(oned,oned)
 
+g=-0.3
+F=-0.001
+G=0.003
 
-flex=aim.AIMGaussian(logI=1.1,alpha=16.,E1=-0.6)#,F1=-0.05,G1=0.05)
+flex=aim.AIMGaussian(logI=1.1,alpha=10.,g1=g,F1=F,G1=G)
 
 Im=flex(x,y)
 
@@ -24,7 +27,7 @@ hdu1.writeto('img.fits',clobber=True)
 hdu2 = fits.PrimaryHDU(data)
 hdu2.writeto('dat.fits',clobber=True)
 
-mod=aim.AIMGaussian()
+mod=aim.AIMGaussian_NEW()
 
 aim.set_gaussian_pars(Im,mod)
 
@@ -45,3 +48,5 @@ print "----------"
 print flex
 print mod
 print fit
+
+

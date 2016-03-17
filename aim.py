@@ -107,7 +107,6 @@ class AIMGaussian_NEW(am.Fittable2DModel):
 		gmodel=am.models.Gaussian2D(amplitude=amp,x_mean=0.,y_mean=0.,
 								  x_stddev=A,y_stddev=A,theta=0.)
 	
-	
 		beta0=c1+1j*c2
 		S=S1+1j*S2
 		T=T1+1j*T2
@@ -124,7 +123,7 @@ class AIMGaussian_NEW(am.Fittable2DModel):
 		return gmodel(beta.real,beta.imag)
 
 
-def set_gaussian_pars(image,gmodel):
+def set_gaussian_pars(image,model):
 	"""
 		A function for creating Gaussian model initial parameters from the data and
 		setting them into the model object.
@@ -145,15 +144,32 @@ def set_gaussian_pars(image,gmodel):
 	
 	logI=np.log10(cts/(2*np.pi*epars[0]**2))
 	
-	gmodel.logI = logI
-	gmodel.c1=ctr[0]
-	gmodel.c2=ctr[1]
-	gmodel.alpha=epars[0]
-	gmodel.E1=epars[1]
-	gmodel.E2=epars[2]
+	model.logI = logI
+	model.c1=ctr[0]
+	model.c2=ctr[1]
+	model.alpha=epars[0]
+	if hasattr(model,'E1'):
+		model.E1=epars[1]
+		model.E2=epars[2]
+	elif hasattr(model,'S1'):
+		model.S1=epars[1]
+		model.S2=epars[2]
+
 	
 	
 	
+def STUV(E,g,F,G):
+	"""
+		Convert ellipticity and lensing parameters to the combined 
+		lensing parametrization.
+	"""
+	M = 1 + E*np.conj(g)
+	S = (E+g)/M
+	T = (F - np.conj(E)*G)/np.conj(M)
+	U = (F - E*np.conj(F))/M
+	V = (G - E*F)/M
+	
+	return S,T,U,V
 
 #####################################################################################
 #################	UTILITIES	#####################################################
