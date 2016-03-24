@@ -25,8 +25,8 @@ class AIMGaussian(am.Fittable2DModel):
 	alpha = am.Parameter(default=1.)
 	c1 = 	am.Parameter(default=0.)
 	c2 = 	am.Parameter(default=0.)
-	E1 = 	am.Parameter(default=0.,min=-0.7,max=0.7)
-	E2 = 	am.Parameter(default=0.,min=-0.7,max=0.7)
+	E1 = 	am.Parameter(default=0.,min=-0.9,max=0.9)
+	E2 = 	am.Parameter(default=0.,min=-0.9,max=0.9)
 	g1 = 	am.Parameter(default=0.)
 	g2 = 	am.Parameter(default=0.)
 	F1 = 	am.Parameter(default=0.)
@@ -41,8 +41,14 @@ class AIMGaussian(am.Fittable2DModel):
 		# Need to get Gaussian2D parameters from my parameters
 		amp = np.power(10.,logI)	# Gaussian amplitude
 		emag=np.sqrt(E1**2 + E2**2) # Ellipticity magnitude
-		q=(1-emag)/(1+emag) 		# Axis ratio b/a
+		q=(1.-emag)/(1.+emag) 		# Axis ratio b/a
 		pa=0.5*np.arctan2(E2,E1) 	# Position angle
+		
+		# Gracefully manage choosing the wrong axis as a vs b
+		if q < 0:
+			q=-q
+			pa=pa+np.pi/2
+
 		a=alpha/np.sqrt(q)
 		b=a*q
 		
@@ -88,8 +94,8 @@ class AIMGaussian_NEW(am.Fittable2DModel):
 	A  =	am.Parameter(default=1.)
 	c1 = 	am.Parameter(default=0.)
 	c2 = 	am.Parameter(default=0.)
-	S1 = 	am.Parameter(default=0.,min=-0.7,max=0.7)
-	S2 = 	am.Parameter(default=0.,min=-0.7,max=0.7)
+	S1 = 	am.Parameter(default=0.)
+	S2 = 	am.Parameter(default=0.)
 	T1 = 	am.Parameter(default=0.)
 	T2 = 	am.Parameter(default=0.)
 	U1 = 	am.Parameter(default=0.)

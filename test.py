@@ -4,15 +4,40 @@ from matplotlib import pyplot
 from astropy.io import fits
 from astropy.modeling import fitting
 
-ngrid=101
+t_e = 50. #arcsec
+rad = 65. #arcsec
+phi = 0.3  #radian
+
+alpha=5.
+Emag = 0.3
+PA = np.pi/2.
+E=Emag*(np.cos(2.*PA) + 1j*np.sin(2.*PA))
+
+k=(0.5*t_e/rad)
+g=-(0.5*t_e/rad)*(np.cos(2.*phi) + 1j*np.sin(2.*phi))/(1.-k)
+F=-0.25*(0.5*t_e/rad**2)*(np.cos(phi) + 1j*np.sin(phi))/(1.-k)
+G=0.25*(1.5*t_e/rad**2)*(np.cos(3.*phi) + 1j*np.sin(3.*phi))/(1.-k)
+
+F*= 0.01 #convert to per pixel, 10mas pixel scale
+G*= 0.01 #convert to per pixel, 10mas pixel scale
+
+print np.abs(E), E
+print np.abs(g), g
+print np.abs(F)*alpha, F
+print np.abs(G)*alpha, G
+
+
+
+ngrid=51
 oned=np.linspace(-(ngrid-1)/2,(ngrid-1)/2,ngrid)
 x,y =np.meshgrid(oned,oned)
 
-g=-0.3
-F=-0.001
-G=0.003
 
-flex=aim.AIMGaussian(logI=1.1,alpha=10.,g1=g,F1=F,G1=G)
+flex=aim.AIMGaussian(logI=1.1,alpha=alpha,
+								E1=E.real,E2=E.imag,
+								g1=g.real,g2=g.imag,
+								F1=F.real,F2=F.imag,
+								G1=G.real,G2=G.imag)
 
 Im=flex(x,y)
 
@@ -27,15 +52,16 @@ hdu1.writeto('img.fits',clobber=True)
 hdu2 = fits.PrimaryHDU(data)
 hdu2.writeto('dat.fits',clobber=True)
 
-mod=aim.AIMGaussian_NEW()
+mod=aim.AIMGaussian() #_NEW()
 
 aim.set_gaussian_pars(Im,mod)
 
 
 fitter=fitting.LevMarLSQFitter()
 
-fit = fitter(mod,x,y,data)
+fit = fitter(mod,x,y,data,maxiter=1000)
 
+#print fitter.fit_info
 
 
 hdu3 = fits.PrimaryHDU(fit(x,y))
