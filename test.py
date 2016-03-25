@@ -3,20 +3,25 @@ import numpy as np
 from matplotlib import pyplot
 from astropy.io import fits
 from astropy.modeling import fitting
+from astropy.io import ascii
 
-t_e = 50. #arcsec
-rad = 65. #arcsec
-phi = 0.3  #radian
 
-alpha=5.
+alpha=4.
 Emag = 0.3
 PA = np.pi/2.
 E=Emag*(np.cos(2.*PA) + 1j*np.sin(2.*PA))
 
-k=(0.5*t_e/rad)
-g=-(0.5*t_e/rad)*(np.cos(2.*phi) + 1j*np.sin(2.*phi))/(1.-k)
-F=-0.25*(0.5*t_e/rad**2)*(np.cos(phi) + 1j*np.sin(phi))/(1.-k)
-G=0.25*(1.5*t_e/rad**2)*(np.cos(3.*phi) + 1j*np.sin(3.*phi))/(1.-k)
+# t_e = 50. #arcsec
+# rad = 55. #arcsec
+phi = 0.  #radian
+# k=(0.5*t_e/rad)
+# g=-(0.5*t_e/rad)*(np.cos(2.*phi) + 1j*np.sin(2.*phi))/(1.-k)
+# F=-0.25*(0.5*t_e/rad**2)*(np.cos(phi) + 1j*np.sin(phi))/(1.-k)
+# G=0.25*(1.5*t_e/rad**2)*(np.cos(3.*phi) + 1j*np.sin(3.*phi))/(1.-k)
+
+g=-(0.7)*(np.cos(2.*phi) + 1j*np.sin(2.*phi))
+F=-(0.5)*(np.cos(phi) + 1j*np.sin(phi))
+G=(0.5)*(np.cos(3.*phi) + 1j*np.sin(3.*phi))
 
 F*= 0.01 #convert to per pixel, 10mas pixel scale
 G*= 0.01 #convert to per pixel, 10mas pixel scale
@@ -26,12 +31,14 @@ print np.abs(g), g
 print np.abs(F)*alpha, F
 print np.abs(G)*alpha, G
 
-
+sextable = ascii.read('data/test.cat',format='sextractor')
+i=125
+print sextable['FLUX_BEST'][i]/(2*np.pi*sextable['A_IMAGE'][i]*sextable['B_IMAGE'][i])
+print sextable['X_IMAGE'][i],sextable['Y_IMAGE'][i]
 
 ngrid=51
 oned=np.linspace(-(ngrid-1)/2,(ngrid-1)/2,ngrid)
 x,y =np.meshgrid(oned,oned)
-
 
 flex=aim.AIMGaussian(logI=1.1,alpha=alpha,
 								E1=E.real,E2=E.imag,
@@ -56,13 +63,11 @@ mod=aim.AIMGaussian() #_NEW()
 
 aim.set_gaussian_pars(Im,mod)
 
-
 fitter=fitting.LevMarLSQFitter()
 
 fit = fitter(mod,x,y,data,maxiter=1000)
 
 #print fitter.fit_info
-
 
 hdu3 = fits.PrimaryHDU(fit(x,y))
 hdu3.writeto('fit.fits',clobber=True)
@@ -70,9 +75,9 @@ hdu3.writeto('fit.fits',clobber=True)
 hdu4 = fits.PrimaryHDU(fit(x,y)-data)
 hdu4.writeto('res.fits',clobber=True)
 
-print "----------"
-print flex
-print mod
-print fit
+# print "----------"
+# print flex
+# print mod
+# print fit
 
 
