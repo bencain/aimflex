@@ -31,10 +31,11 @@ print np.abs(g), g
 print np.abs(F)*alpha, F
 print np.abs(G)*alpha, G
 
-sextable = ascii.read('data/test.cat',format='sextractor')
+sextable = ascii.read('data/test.cat')
 i=125
 print sextable['FLUX_BEST'][i]/(2*np.pi*sextable['A_IMAGE'][i]*sextable['B_IMAGE'][i])
-print sextable['X_IMAGE'][i],sextable['Y_IMAGE'][i]
+print sextable['X_IMAGE'].astype(int)[i]
+print sextable['Y_IMAGE'].astype(int)[i]
 
 ngrid=51
 oned=np.linspace(-(ngrid-1)/2,(ngrid-1)/2,ngrid)

@@ -1,6 +1,7 @@
 
 import numpy as np
 import astropy.modeling as am
+from astropy.io import ascii, fits
 
 
 class AIMGaussian(am.Fittable2DModel):
@@ -177,32 +178,74 @@ def STUV(E,g,F,G):
 	
 	return S,T,U,V
 
+
+
+def fit_dataset(image, weight, SEcatalog,outfile,rscale=3.,
+				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE'):
+	"""
+		Using a data image, a weight image, and a Source Extractor-like catalog
+		fit an AIM profile to each of the objects in the catalog, and store the output.
+		
+		Assumes the SEcatalog has at least the NUMBER, X_IMAGE, Y_IMAGE, and A_IMAGE 
+		columns.
+	"""
+
+	sextable = ascii.read(SEcatalog)
+	img_hdu = fits.open(image)
+	wht_hdu = fits.open(weight)
+	
+	catno=sextable[ntag]
+	cutradii = (sextable[atag]*rscale).astype(int)
+	xpix = sextable[xtag].astype(int)
+	ypix = sextable[ytag].astype(int)
+	
+	for i in range(cutradii.size):
+		print ("Object %i" % catno[i])
+		x,y =np.meshgrid(np.linspace(-cutradii[i],cutradii[i],2*cutradii[i]+1),
+						 np.linspace(-cutradii[i],cutradii[i],2*cutradii[i]+1))
+		mask=(x**2+y**2<=cutradii[i]**2).astype(int)
+		
+		stamp = img_hdu['SCI'].data[(ypix[i]-cutradii[i]):(ypix[i]+cutradii[i]+1),\
+									(xpix[i]-cutradii[i]):(xpix[i]+cutradii[i]+1)]*mask
+									
+		weight = wht_hdu['SCI'].data[(ypix[i]-cutradii[i]):(ypix[i]+cutradii[i]+1),\
+									 (xpix[i]-cutradii[i]):(xpix[i]+cutradii[i]+1)]*mask
+	
+		
+		
+	
 #####################################################################################
 #################	UTILITIES	#####################################################
 #####################################################################################
 	
-def calc_moments(image,xord=0,yord=0):
+def calc_moments(image,xord=0,yord=0,weight=1.):
 	"""
 		A function for calculating arbitrary xy image moments
 	"""
+	dims=image.shape
 	
-	if xord < 0:
+	# Handle weights
+	if not type(weight) == np.ndarray:
+		w = 1.
+	else:
+		w = weight/np.sum(weight) # Normalize
+
+	if xord < 0: # No negative orders
 		xord=0
 	if yord < 0:
 		yord=0
-	dims=image.shape
 	
 	x,y =np.meshgrid(np.linspace(-(dims[0]-1)/2,(dims[0]-1)/2,dims[0]),
 					 np.linspace(-(dims[1]-1)/2,(dims[1]-1)/2,dims[1]))
 	
-	if (xord+yord) > 1:
-		cts = calc_moments(image,xord=0,yord=0)
-		ctr = [calc_moments(image,xord=1,yord=0)/cts,
-			   calc_moments(image,xord=0,yord=1)/cts]
+	if (xord+yord) > 1: # Calc ctr and flux for higher moments
+		cts = calc_moments(image,xord=0,yord=0,weight=w)
+		ctr = [calc_moments(image,xord=1,yord=0,weight=w)/cts,
+			   calc_moments(image,xord=0,yord=1,weight=w)/cts]
 	else:
 		ctr=[0.,0.]
 	
-	return np.sum(image*np.power((x-ctr[0]),xord)*np.power((y-ctr[1]),yord))
+	return np.sum(image*w*np.power((x-ctr[0]),xord)*np.power((y-ctr[1]),yord))
 	
 	
 
