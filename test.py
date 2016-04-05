@@ -68,7 +68,9 @@ fitter=fitting.LevMarLSQFitter()
 
 fit = fitter(mod,x,y,data,maxiter=1000)
 
-#print fitter.fit_info
+import pdb
+pdb.set_trace()
+print fitter.fit_info
 
 hdu3 = fits.PrimaryHDU(fit(x,y))
 hdu3.writeto('fit.fits',clobber=True)
