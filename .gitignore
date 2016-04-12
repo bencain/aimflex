@@ -6,5 +6,6 @@
 pyraf/**
 **/login.cl
 *.pyc
+*.fits
 
 proj_notes.txt

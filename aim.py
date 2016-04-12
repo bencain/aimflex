@@ -22,8 +22,8 @@ class AIMGaussian(am.Fittable2DModel):
 			G2		- reduced 3-Flexion y
 	"""
 
-	logI  = am.Parameter(default=1.)
-	alpha = am.Parameter(default=1.)
+	logI  = am.Parameter(default=1.,max=4.)
+	alpha = am.Parameter(default=1.,min=0.)
 	c1 = 	am.Parameter(default=0.)
 	c2 = 	am.Parameter(default=0.)
 	E1 = 	am.Parameter(default=0.,min=-0.9,max=0.9)
@@ -40,10 +40,13 @@ class AIMGaussian(am.Fittable2DModel):
 	def evaluate(x,y,logI,alpha,c1,c2,E1,E2,g1,g2,F1,F2,G1,G2):
 	
 		# Need to get Gaussian2D parameters from my parameters
-		amp = np.power(10.,logI)	# Gaussian amplitude
-		emag=np.sqrt(E1**2 + E2**2) # Ellipticity magnitude
-		q=(1.-emag)/(1.+emag) 		# Axis ratio b/a
-		pa=0.5*np.arctan2(E2,E1) 	# Position angle
+		if logI > 3.:
+			amp=1000.
+		else:
+			amp = np.power(10.,logI)	# Gaussian amplitude
+		emag=np.sqrt(E1**2 + E2**2) 	# Ellipticity magnitude
+		q=(1.-emag)/(1.+emag) 			# Axis ratio b/a
+		pa=0.5*np.arctan2(E2,E1) 		# Position angle
 		
 		# Gracefully manage choosing the wrong axis as a vs b
 		if q < 0:
@@ -112,7 +115,7 @@ class AIMGaussian_NEW(am.Fittable2DModel):
 		amp = np.power(10.,logI)	# Gaussian amplitude
 				
 		gmodel=am.models.Gaussian2D(amplitude=amp,x_mean=0.,y_mean=0.,
-								  x_stddev=A,y_stddev=A,theta=0.)
+								    x_stddev=A,y_stddev=A,theta=0.)
 	
 		beta0=c1+1j*c2
 		S=S1+1j*S2
@@ -130,18 +133,18 @@ class AIMGaussian_NEW(am.Fittable2DModel):
 		return gmodel(beta.real,beta.imag)
 
 
-def set_gaussian_pars(image,model):
+def set_gaussian_pars(image,model,weight=1.):
 	"""
 		A function for creating Gaussian model initial parameters from the data and
 		setting them into the model object.
 	"""
 	
-	cts = calc_moments(image)
-	ctr = [calc_moments(image,xord=1)/cts,
-		   calc_moments(image,yord=1)/cts]
-	Q11 = calc_moments(image,xord=2)/cts
-	Q22 = calc_moments(image,yord=2)/cts
-	Q12 = calc_moments(image,xord=1,yord=1)/cts
+	cts = calc_moments(image,weight=weight)
+	ctr = [calc_moments(image,xord=1,weight=weight)/cts,
+		   calc_moments(image,yord=1,weight=weight)/cts]
+	Q11 = calc_moments(image,xord=2,weight=weight)/cts
+	Q22 = calc_moments(image,yord=2,weight=weight)/cts
+	Q12 = calc_moments(image,xord=1,yord=1,weight=weight)/cts
 	
 	m1=Q11-Q12**2/Q22
 	m2=Q22-Q12**2/Q11
@@ -180,7 +183,7 @@ def STUV(E,g,F,G):
 
 
 
-def fit_dataset(image, weight, SEcatalog,outfile,rscale=3.,
+def fit_dataset(image, weight, catalog, outfile, rscale=2.,
 				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE'):
 	"""
 		Using a data image, a weight image, and a Source Extractor-like catalog
@@ -190,7 +193,7 @@ def fit_dataset(image, weight, SEcatalog,outfile,rscale=3.,
 		columns.
 	"""
 
-	sextable = ascii.read(SEcatalog)
+	sextable = ascii.read(catalog)
 	img_hdu = fits.open(image)
 	wht_hdu = fits.open(weight)
 	
@@ -199,18 +202,44 @@ def fit_dataset(image, weight, SEcatalog,outfile,rscale=3.,
 	xpix = sextable[xtag].astype(int)
 	ypix = sextable[ytag].astype(int)
 	
+	
 	for i in range(cutradii.size):
 		print ("Object %i" % catno[i])
 		x,y =np.meshgrid(np.linspace(-cutradii[i],cutradii[i],2*cutradii[i]+1),
 						 np.linspace(-cutradii[i],cutradii[i],2*cutradii[i]+1))
 		mask=(x**2+y**2<=cutradii[i]**2).astype(int)
 		
-		stamp = img_hdu['SCI'].data[(ypix[i]-cutradii[i]):(ypix[i]+cutradii[i]+1),\
+		stamp = img_hdu[0].data[(ypix[i]-cutradii[i]):(ypix[i]+cutradii[i]+1),\
 									(xpix[i]-cutradii[i]):(xpix[i]+cutradii[i]+1)]*mask
 									
-		weight = wht_hdu['SCI'].data[(ypix[i]-cutradii[i]):(ypix[i]+cutradii[i]+1),\
+		weight = wht_hdu[0].data[(ypix[i]-cutradii[i]):(ypix[i]+cutradii[i]+1),\
 									 (xpix[i]-cutradii[i]):(xpix[i]+cutradii[i]+1)]*mask
-	
+		outname='obj_%04i_output' % catno[i]
+		
+		fits.PrimaryHDU(stamp).writeto(outname+'_stamp.fits',clobber=True)
+		fits.PrimaryHDU(weight).writeto(outname+'_weight.fits',clobber=True)
+		
+		model=AIMGaussian()
+		set_gaussian_pars(stamp,model,weight=weight)
+		
+		print model
+		
+		model.alpha.max=0.75*cutradii[i]
+		model.c1.max=0.5*cutradii[i]
+		model.c2.max=0.5*cutradii[i]
+		model.c1.min=-0.5*cutradii[i]
+		model.c2.min=-0.5*cutradii[i]
+		
+		fitter=am.fitting.LevMarLSQFitter()
+
+		fit = fitter(model,x,y,stamp,maxiter=1000,weights=weight)
+		
+		print fit
+		print np.sum(weight*(stamp-fit(x,y))**2)
+		print stamp.size
+		
+		fits.PrimaryHDU(fit(x,y)).writeto(outname+'_fit.fits',clobber=True)
+		fits.PrimaryHDU(stamp - fit(x,y)).writeto(outname+'_residual.fits',clobber=True)
 		
 		
 	
