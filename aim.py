@@ -34,10 +34,11 @@ class AIMGaussian(am.Fittable2DModel):
 	F2 = 	am.Parameter(default=0.)
 	G1 = 	am.Parameter(default=0.)
 	G2 = 	am.Parameter(default=0.)
-	
-			
+		
 	@staticmethod
-	def evaluate(x,y,logI,alpha,c1,c2,E1,E2,g1,g2,F1,F2,G1,G2):
+	def evaluate(x,y,
+				 logI,alpha,c1,c2,
+				 E1,E2,g1,g2,F1,F2,G1,G2):
 	
 		# Need to get Gaussian2D parameters from my parameters
 		if logI > 3.:
@@ -72,9 +73,52 @@ class AIMGaussian(am.Fittable2DModel):
 		beta = coo - g*coo_c - np.conj(F)*coo**2 \
 				- 2*F*coo*coo_c - G*coo_c**2 
 				
-		# Now for the model:
+		# Now for the model:			
 		return gmodel(beta.real,beta.imag)
 
+class AIM(am.FittableModel):
+	"""
+		This class implements an elliptical Sersic source plane model profile 
+		lensed by shear and flexion.  Parameters included:
+			logI	- peak surface brightness
+			alpha	- size = sqrt(ab) = a*sqrt(E)
+			index	- Sersic index (0.5 = Gaussian)
+			c1		- image plane x location for beta=0
+			c2		- image plane y location for beta=0
+			E1		- + polarized ellipticity
+			E2		- x polarized ellipticity
+			g1		- + polarized reduced shear
+			g2		- x polarized reduced shear
+			F1		- reduced 1-Flexion x
+			F2		- reduced 1-Flexion y
+			G1		- reduced 3-Flexion x
+			G2		- reduced 3-Flexion y
+		We also implement a PSF convolution as well.
+	"""
+	inputs = ('x', 'y', 'psf',)
+	outputs = ('img',)
+	
+	logI  = am.Parameter(default=1.,max=4.)
+	alpha = am.Parameter(default=1.,min=0.)
+	index = am.Parameter(default=0.5,min=0.01)
+	c1 = 	am.Parameter(default=0.)
+	c2 = 	am.Parameter(default=0.)
+	E1 = 	am.Parameter(default=0.,min=-0.9,max=0.9)
+	E2 = 	am.Parameter(default=0.,min=-0.9,max=0.9)
+	g1 = 	am.Parameter(default=0.)
+	g2 = 	am.Parameter(default=0.)
+	F1 = 	am.Parameter(default=0.)
+	F2 = 	am.Parameter(default=0.)
+	G1 = 	am.Parameter(default=0.)
+	G2 = 	am.Parameter(default=0.)
+
+	@staticmethod
+	def evaluate(x,y,psf,
+				 logI,alpha,index,c1,c2,
+				 E1,E2,g1,g2,F1,F2,G1,G2):	
+		return psf
+	
+	
 
 class AIMGaussian_NEW(am.Fittable2DModel):
 	"""
@@ -106,6 +150,8 @@ class AIMGaussian_NEW(am.Fittable2DModel):
 	U2 = 	am.Parameter(default=0.)
 	V1 = 	am.Parameter(default=0.)
 	V2 = 	am.Parameter(default=0.)
+	
+	psf = None
 	
 			
 	@staticmethod
