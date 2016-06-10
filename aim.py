@@ -24,7 +24,7 @@ class AIM(am.FittableModel):
 			G2		- reduced 3-Flexion y
 		We also implement a PSF convolution as well.
 	"""
-	inputs = ('psf',)
+	inputs = ('x','y','psf',)
 	outputs = ('img',)
 	
 	logI  = am.Parameter(default=1.,max=4.)
@@ -41,28 +41,24 @@ class AIM(am.FittableModel):
 	G1 = 	am.Parameter(default=0.)
 	G2 = 	am.Parameter(default=0.)
 	
-	nx = 	am.Parameter(default=11,fixed=True)
-	ny = 	am.Parameter(default=11,fixed=True)
-	
+	standard_broadcasting = False
 		
 	@staticmethod
-	def evaluate(psf,
+	def evaluate(x,y,psf,
 				 logI,alpha,index,c1,c2,
-				 E1,E2,g1,g2,F1,F2,G1,G2,nx,ny):	
-		
-		# Make the xy grid
-		onex=np.linspace(-(nx-1)/2,(nx-1)/2,nx)
-		oney=np.linspace(-(ny-1)/2,(ny-1)/2,ny)
-		x,y =np.meshgrid(onex,oney)
-		
+				 E1,E2,g1,g2,F1,F2,G1,G2):	
+				
 		# Need to get Gaussian2D parameters from my parameters
 		if logI > 3.:
 			amp=1000.
 		else:
 			amp = np.power(10.,logI)	# Gaussian amplitude
 		
-		
-		con
+		# Ellipse parameters
+		ellipse = convert_epars([alpha,E1,E2],pol_to_ae=True)
+		a = ellipse[0]/np.sqrt(ellipse[1])
+		b = ellipse[0]*np.sqrt(ellipse[1])
+		pa = ellipse[2]
 		
 		gmodel=am.models.Gaussian2D(amplitude=amp,x_mean=0.,y_mean=0.,
 								  x_stddev=a,y_stddev=b,theta=pa)
@@ -80,10 +76,21 @@ class AIM(am.FittableModel):
 		beta = coo - g*coo_c - np.conj(F)*coo**2 \
 				- 2*F*coo*coo_c - G*coo_c**2 
 				
-		# Now for the model:			
-		return psf
-# 		return gmodel(beta.real,beta.imag)
-	
+		# Now for the model:
+		if np.isnan(psf):
+			print "no psf"
+		else:
+			print "yay psf!"
+  		return gmodel(beta.real,beta.imag)
+  		
+  	# @staticmethod
+# 	def evaluate(x,y,
+# 				 logI,alpha,index,c1,c2,
+# 				 E1,E2,g1,g2,F1,F2,G1,G2):
+# 		return evaluate(x,y,None,
+# 				 logI,alpha,index,c1,c2,
+# 				 E1,E2,g1,g2,F1,F2,G1,G2)
+# 	
 
 
 def set_gaussian_pars(image,model,weight=1.):

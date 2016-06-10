@@ -41,13 +41,19 @@ psf=np.zeros((3,3))
 psf[1,1]=1.
 
 
+# Make the xy grid
+nx = ny = ngrid
+onex=np.linspace(-(nx-1)/2,(nx-1)/2,nx)
+oney=np.linspace(-(ny-1)/2,(ny-1)/2,ny)
+x,y =np.meshgrid(onex,oney)
+
 flex=aim.AIM(logI=1.1,alpha=alpha, index=0.5,
 				E1=E.real,E2=E.imag,
 				g1=g.real,g2=g.imag,
 				F1=F.real,F2=F.imag,
-				G1=G.real,G2=G.imag,nx=ngrid,ny=ngrid)
+				G1=G.real,G2=G.imag)
 
-print flex(psf)
+print flex(x,y,None)
 
 
 
