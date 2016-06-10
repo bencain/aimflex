@@ -33,37 +33,27 @@ G=(0.5)*(np.cos(3.*phi) + 1j*np.sin(3.*phi))
 F*= 0.01 #convert to per pixel, 10mas pixel scale
 G*= 0.01 #convert to per pixel, 10mas pixel scale
 
-print np.abs(E), E
-print np.abs(g), g
-print np.abs(F)*alpha, F
-print np.abs(G)*alpha, G
 
-# sextable = ascii.read('data/test.cat')
-# i=125
-# print sextable['FLUX_BEST'][i]/(2*np.pi*sextable['A_IMAGE'][i]*sextable['B_IMAGE'][i])
-# print sextable['X_IMAGE'].astype(int)[i]
-# print sextable['Y_IMAGE'].astype(int)[i]
 
 ngrid=51
-oned=np.linspace(-(ngrid-1)/2,(ngrid-1)/2,ngrid)
-x,y =np.meshgrid(oned,oned)
-
-flex=aim.AIMGaussian(logI=1.1,alpha=alpha,
-								E1=E.real,E2=E.imag,
-								g1=g.real,g2=g.imag,
-								F1=F.real,F2=F.imag,
-								G1=G.real,G2=G.imag)
 
 psf=np.zeros((3,3))
 psf[1,1]=1.
 
 
-Im=flex(x,y)
+flex=aim.AIM(logI=1.1,alpha=alpha, index=0.5,
+				E1=E.real,E2=E.imag,
+				g1=g.real,g2=g.imag,
+				F1=F.real,F2=F.imag,
+				G1=G.real,G2=G.imag,nx=ngrid,ny=ngrid)
 
-anew = aim.AIM()
+print flex(psf)
 
-print anew(psf,psf,psf)
 
+
+
+
+# 
 # # pyplot.imshow(Im)
 # # pyplot.show()
 # 

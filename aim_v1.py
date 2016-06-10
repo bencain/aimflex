@@ -4,6 +4,77 @@ import astropy.modeling as am
 from astropy.io import ascii, fits
 
 
+class AIMGaussian(am.Fittable2DModel):
+	"""
+		This class implements an elliptical Gaussian source plane model lensed 
+		by shear and flexion.  Parameters included:
+			logI	- peak surface brightness
+			alpha	- size = sqrt(ab) = a*sqrt(E)
+			c1		- image plane x location for beta=0
+			c2		- image plane y location for beta=0
+			E1		- + polarized ellipticity
+			E2		- x polarized ellipticity
+			g1		- + polarized reduced shear
+			g2		- x polarized reduced shear
+			F1		- reduced 1-Flexion x
+			F2		- reduced 1-Flexion y
+			G1		- reduced 3-Flexion x
+			G2		- reduced 3-Flexion y
+	"""
+
+	logI  = am.Parameter(default=1.,max=4.)
+	alpha = am.Parameter(default=1.,min=0.)
+	c1 = 	am.Parameter(default=0.)
+	c2 = 	am.Parameter(default=0.)
+	E1 = 	am.Parameter(default=0.,min=-0.9,max=0.9)
+	E2 = 	am.Parameter(default=0.,min=-0.9,max=0.9)
+	g1 = 	am.Parameter(default=0.)
+	g2 = 	am.Parameter(default=0.)
+	F1 = 	am.Parameter(default=0.)
+	F2 = 	am.Parameter(default=0.)
+	G1 = 	am.Parameter(default=0.)
+	G2 = 	am.Parameter(default=0.)
+		
+	@staticmethod
+	def evaluate(x,y,
+				 logI,alpha,c1,c2,
+				 E1,E2,g1,g2,F1,F2,G1,G2):
+	
+		# Need to get Gaussian2D parameters from my parameters
+		if logI > 3.:
+			amp=1000.
+		else:
+			amp = np.power(10.,logI)	# Gaussian amplitude
+		emag=np.sqrt(E1**2 + E2**2) 	# Ellipticity magnitude
+		q=(1.-emag)/(1.+emag) 			# Axis ratio b/a
+		pa=0.5*np.arctan2(E2,E1) 		# Position angle
+		
+		# Gracefully manage choosing the wrong axis as a vs b
+		if q < 0:
+			q=-q
+			pa=pa+np.pi/2
+
+		a=alpha/np.sqrt(q)
+		b=a*q
+		
+		gmodel=am.models.Gaussian2D(amplitude=amp,x_mean=0.,y_mean=0.,
+								  x_stddev=a,y_stddev=b,theta=pa)
+	
+	
+		beta0=c1+1j*c2
+		E=E1+1j*E2
+		g=g1+1j*g2
+		F=F1+1j*F2
+		G=G1+1j*G2
+		
+		coo = x+1j*y - beta0
+		coo_c = np.conj(coo)
+		
+		beta = coo - g*coo_c - np.conj(F)*coo**2 \
+				- 2*F*coo*coo_c - G*coo_c**2 
+				
+		# Now for the model:			
+		return gmodel(beta.real,beta.imag)
 
 class AIM(am.FittableModel):
 	"""
@@ -60,9 +131,17 @@ class AIM(am.FittableModel):
 			amp=1000.
 		else:
 			amp = np.power(10.,logI)	# Gaussian amplitude
+		emag=np.sqrt(E1**2 + E2**2) 	# Ellipticity magnitude
+		q=(1.-emag)/(1.+emag) 			# Axis ratio b/a
+		pa=0.5*np.arctan2(E2,E1) 		# Position angle
 		
-		
-		con
+		# Gracefully manage choosing the wrong axis as a vs b
+		if q < 0:
+			q=-q
+			pa=pa+np.pi/2
+
+		a=alpha/np.sqrt(q)
+		b=a*q
 		
 		gmodel=am.models.Gaussian2D(amplitude=amp,x_mean=0.,y_mean=0.,
 								  x_stddev=a,y_stddev=b,theta=pa)
@@ -84,6 +163,64 @@ class AIM(am.FittableModel):
 		return psf
 # 		return gmodel(beta.real,beta.imag)
 	
+
+class AIMGaussian_NEW(am.Fittable2DModel):
+	"""
+		This class implements an elliptical Gaussian source plane model lensed 
+		by shear and flexion.  Parameters included:
+			logI	- peak surface brightness
+			A		- size 
+			c1		- image plane x location for beta=0
+			c2		- image plane y location for beta=0
+			S1		- + polarized shear+ellipticity
+			S2		- x polarized shear+ellipticity
+			T1		- First 1-flexion x
+			T2		- First 1-flexion y
+			U1		- Second 1-Flexion x
+			U2		- Second 1-Flexion y
+			V1		- 3-Flexion x
+			V2		- 3-Flexion y
+	"""
+
+	logI  = am.Parameter(default=1.)
+	A  =	am.Parameter(default=1.)
+	c1 = 	am.Parameter(default=0.)
+	c2 = 	am.Parameter(default=0.)
+	S1 = 	am.Parameter(default=0.)
+	S2 = 	am.Parameter(default=0.)
+	T1 = 	am.Parameter(default=0.)
+	T2 = 	am.Parameter(default=0.)
+	U1 = 	am.Parameter(default=0.)
+	U2 = 	am.Parameter(default=0.)
+	V1 = 	am.Parameter(default=0.)
+	V2 = 	am.Parameter(default=0.)
+	
+	psf = None
+	
+			
+	@staticmethod
+	def evaluate(x,y,logI,A,c1,c2,S1,S2,T1,T2,U1,U2,V1,V2):
+	
+		# Need to get Gaussian2D parameters from my parameters
+		amp = np.power(10.,logI)	# Gaussian amplitude
+				
+		gmodel=am.models.Gaussian2D(amplitude=amp,x_mean=0.,y_mean=0.,
+								    x_stddev=A,y_stddev=A,theta=0.)
+	
+		beta0=c1+1j*c2
+		S=S1+1j*S2
+		T=T1+1j*T2
+		U=U1+1j*U2
+		V=V1+1j*V2
+		
+		coo = x+1j*y - beta0
+		coo_c = np.conj(coo)
+		
+		beta = coo - S*coo_c - np.conj(T)*coo**2 \
+				- 2*U*coo*coo_c - V*coo_c**2 
+				
+		# Now for the model:
+		return gmodel(beta.real,beta.imag)
 
 
 def set_gaussian_pars(image,model,weight=1.):
