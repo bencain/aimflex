@@ -53,7 +53,7 @@ flex=aim.AIM(logI=1.1,alpha=alpha, index=0.5,
 				F1=F.real,F2=F.imag,
 				G1=G.real,G2=G.imag)
 
-print flex(x,y,None)
+print flex(x,y,psf)
 
 
 

@@ -2,7 +2,7 @@
 import numpy as np
 import astropy.modeling as am
 from astropy.io import ascii, fits
-
+from astropy.convolution import convolve_fft as cfft
 
 
 class AIM(am.FittableModel):
@@ -77,11 +77,18 @@ class AIM(am.FittableModel):
 				- 2*F*coo*coo_c - G*coo_c**2 
 				
 		# Now for the model:
-		if np.isnan(psf):
+		img = gmodel(beta.real,beta.imag)
+		print psf.shape
+		if np.any(np.isnan(psf)):
 			print "no psf"
+			return img
 		else:
 			print "yay psf!"
-  		return gmodel(beta.real,beta.imag)
+			if len(psf.shape) == 2:
+				print "2d psf"
+				return cfft(img,psf)
+				
+  		
   		
   	# @staticmethod
 # 	def evaluate(x,y,
