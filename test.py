@@ -37,59 +37,58 @@ G*= 0.01 #convert to per pixel, 10mas pixel scale
 
 ngrid=51
 
-psf=np.zeros((3,3))
-psf[1,1]=1.
-
-
 # Make the xy grid
 nx = ny = ngrid
 onex=np.linspace(-(nx-1)/2,(nx-1)/2,nx)
 oney=np.linspace(-(ny-1)/2,(ny-1)/2,ny)
 x,y =np.meshgrid(onex,oney)
 
-flex=aim.AIM(logI=1.1,alpha=alpha, index=0.5,
+npsf = 11
+sigpsf = 2.0
+onep=np.linspace(-(npsf-1)/2,(npsf-1)/2,npsf)
+px,py = np.meshgrid(onep,onep)
+psf = np.exp(-0.5*(px**2 + py**2)/sigpsf**2)
+
+
+flex=aim.AIM(logI=1.1,alpha=alpha, index=0.75,
 				E1=E.real,E2=E.imag,
 				g1=g.real,g2=g.imag,
 				F1=F.real,F2=F.imag,
 				G1=G.real,G2=G.imag)
 
-print flex(x,y,psf)
+
+Im = flex(x,y,None)
 
 
+data = Im + np.random.randn(ngrid,ngrid)*0.1
 
+hdu1 = fits.PrimaryHDU(Im)
+hdu1.writeto('img.fits',clobber=True)
 
+hdu2 = fits.PrimaryHDU(data)
+hdu2.writeto('dat.fits',clobber=True)
 
-# 
-# # pyplot.imshow(Im)
-# # pyplot.show()
-# 
-# data=Im + np.random.randn(ngrid,ngrid)*0.1
-# 
-# hdu1 = fits.PrimaryHDU(Im)
-# hdu1.writeto('img.fits',clobber=True)
-# 
-# hdu2 = fits.PrimaryHDU(data)
-# hdu2.writeto('dat.fits',clobber=True)
-# 
-# mod=aim.AIMGaussian() #_NEW()
-# 
-# aim.set_gaussian_pars(Im,mod)
-# 
+mod=aim.AIM()
+
+aim.set_gaussian_pars(Im,mod)
+
 # fitter=fitting.LevMarLSQFitter()
-# 
-# fit = fitter(mod,x,y,data,maxiter=1000)
-# 
-# #print fitter.fit_info
-# 
-# hdu3 = fits.PrimaryHDU(fit(x,y))
-# hdu3.writeto('fit.fits',clobber=True)
-# 
-# hdu4 = fits.PrimaryHDU(fit(x,y)-data)
-# hdu4.writeto('res.fits',clobber=True)
-# 
-# # print "----------"
-# # print flex
-# # print mod
-# # print fit
+fitter = aim.AIMSimplexLSQFitter()
+
+fit = fitter(mod,x,y,psf,data,maxiter=1000)
+
+
+print fitter.fit_info
+
+hdu3 = fits.PrimaryHDU(fit(x,y))
+hdu3.writeto('fit.fits',clobber=True)
+
+hdu4 = fits.PrimaryHDU(fit(x,y)-data)
+hdu4.writeto('res.fits',clobber=True)
+
+print "----------"
+print flex
+print mod
+print fit
 
 
