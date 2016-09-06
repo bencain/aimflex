@@ -1,8 +1,12 @@
 
+
 import numpy as np
+import matplotlib.pyplot as plt
+
 import astropy.modeling as am
 from astropy.io import ascii, fits
 from astropy.convolution import convolve_fft as cfft
+
 
 
 class AIM(am.FittableModel):
@@ -201,14 +205,15 @@ def STUV(E,g,F,G):
 
 
 
-def fit_dataset(image, weight, catalog, outfile, rscale=2.,
+def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE'):
 	"""
 		Using a data image, a weight image, and a Source Extractor-like catalog
-		fit an AIM profile to each of the objects in the catalog, and store the output.
+		fit an AIM profile to each of the objects in the catalog, and store the 
+		output.
 		
-		Assumes the SEcatalog has at least the NUMBER, X_IMAGE, Y_IMAGE, and A_IMAGE 
-		columns.
+		Assumes the SEcatalog has at least the NUMBER, X_IMAGE, Y_IMAGE, and 
+		A_IMAGE columns.
 	"""
 
 	sextable = ascii.read(catalog)
@@ -220,6 +225,9 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,
 	xpix = sextable[xtag].astype(int)
 	ypix = sextable[ytag].astype(int)
 	
+	if psf == None:
+		psf = np.zeros((3,3))
+		psf[1,1]=1.
 	
 	for i in range(cutradii.size):
 		print ("Object %i" % catno[i])
@@ -237,7 +245,7 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,
 		fits.PrimaryHDU(stamp).writeto(outname+'_stamp.fits',clobber=True)
 		fits.PrimaryHDU(weight).writeto(outname+'_weight.fits',clobber=True)
 		
-		model=AIMGaussian()
+		model=AIM()
 		set_gaussian_pars(stamp,model,weight=weight)
 		
 		print model
@@ -248,9 +256,10 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,
 		model.c1.min=-0.5*cutradii[i]
 		model.c2.min=-0.5*cutradii[i]
 		
-		fitter=am.fitting.LevMarLSQFitter()
+# 		fitter=am.fitting.LevMarLSQFitter()
+		fitter=AIMSimplexLSQFitter()
 
-		fit = fitter(model,x,y,stamp,maxiter=1000,weights=weight)
+		fit = fitter(model,x,y,psf,stamp,maxiter=1000)
 		
 		print fit
 		print np.sum(weight*(stamp-fit(x,y))**2)
@@ -435,3 +444,23 @@ def convert_epars(epars,
 		outpars=convert_epars(convert_epars(epars,mi_to_pol=True),pol_to_ae=True)
 
 	return outpars
+
+
+def triptych(data,fit,resid=None,tag='triptych'):
+	"""
+		Make a triptych figure with the data, fit, and residual images.
+	"""
+	if resid == None:
+		resid = data - fit
+		
+	f, (ax1, ax2, ax3) = plt.subplots(1,3)
+
+	ax1.imshow(data,title='Data')
+	ax2.imshow(fit,title='Fit')
+	ax3.imshow(resid,title='Residual')
+
+	[a.set_xticks([]) for a in [ax1,ax2,ax3] ]
+	[a.set_yticks([]) for a in [ax1,ax2,ax3] ]
+
+	f.savefig(tag+'.png',bbox_inches='tight', transparent=True)
+	
