@@ -7,6 +7,8 @@ import astropy.modeling as am
 from astropy.io import ascii, fits
 from astropy.convolution import convolve_fft as cfft
 
+from astropy.modeling.optimizers import Simplex
+from astropy.modeling.statistic import leastsquare
 
 
 class AIM(am.FittableModel):
@@ -88,8 +90,50 @@ class AIM(am.FittableModel):
 		else:
 			if len(psf.shape) == 2:
 				return cfft(img,psf)
-				
-class AIMSimplexLSQFitter(am.fitting.Fitter):
+
+
+def _convert_input(x, y, p, z=None, n_models=1, model_set_axis=0):
+	"""Convert inputs to float arrays."""
+
+	x = np.asarray(x, dtype=np.float)
+	y = np.asarray(y, dtype=np.float)
+	p = np.asarray(p, dtype=np.float)
+	if z is not None:
+		z = np.asarray(z, dtype=np.float)
+
+	# For compatibility with how the linear fitter code currently expects to
+	# work, shift the dependent variable's axes to the expected locations
+	if n_models > 1:
+		if z is None:
+			if y.shape[model_set_axis] != n_models:
+				raise ValueError(
+					"Number of data sets (y array is expected to equal "
+					"the number of parameter sets)")
+			# For a 1-D model the y coordinate's model-set-axis is expected to
+			# be last, so that its first dimension is the same length as the x
+			# coordinates.  This is in line with the expectations of
+			# numpy.linalg.lstsq:
+			# http://docs.scipy.org/doc/numpy/reference/generated/numpy.linalg.lstsq.html
+			# That is, each model should be represented by a column.  TODO:
+			# Obviously this is a detail of np.linalg.lstsq and should be
+			# handled specifically by any fitters that use it...
+			y = np.rollaxis(y, model_set_axis, y.ndim)
+		else:
+			# Shape of z excluding model_set_axis
+			z_shape = z.shape[:model_set_axis] + z.shape[model_set_axis + 1:]
+
+			if not (x.shape == y.shape == z_shape):
+				raise ValueError("x, y and z should have the same shape")
+
+	if z is None:
+		farg = (x, y, p)
+	else:
+		farg = (x, y, p, z)
+	
+	return farg
+
+
+class AIMSimplexLSQFitter(am.fitting.SimplexLSQFitter):
     """
 
     Simplex algorithm and least squares statistic.
@@ -101,12 +145,14 @@ class AIMSimplexLSQFitter(am.fitting.Fitter):
 
     """
 
-    supported_constraints = am.fitting.Simplex.supported_constraints
+    supported_constraints = Simplex.supported_constraints
 
     def __init__(self):
         super(am.fitting.SimplexLSQFitter, self).__init__(optimizer=Simplex,
-                                               statistic=leastsquare)
+                                                  statistic=leastsquare)
         self.fit_info = {}
+
+
 
     def __call__(self, model, x, y, p, z=None, weights=None, **kwargs):
         """
@@ -142,17 +188,20 @@ class AIMSimplexLSQFitter(am.fitting.Fitter):
             a copy of the input model with parameters set by the fitter
         """
 
-        model_copy = _validate_model(model,
+        model_copy = am.fitting._validate_model(model,
                                      self._opt_method.supported_constraints)
-        farg = _convert_input(x, y, p, z)
+        
+        farg = _convert_input(x, y, p, z,n_models=len(model_copy))
         farg = (model_copy, weights, ) + farg
 
-        p0, _ = _model_to_fit_params(model_copy)
-
-        fitparams, self.fit_info = self._opt_method(
-            self.objective_function, p0, farg, **kwargs)
-        _fitter_to_model_params(model_copy, fitparams)
+        p0, _ = am.fitting._model_to_fit_params(model_copy)
+		
+        fitparams, self.fit_info = self._opt_method(self.objective_function, p0, farg, **kwargs)
+        
+        am.fitting._fitter_to_model_params(model_copy, fitparams)
         return model_copy
+
+
 
 
 def set_gaussian_pars(image,model,weight=1.):
@@ -248,7 +297,6 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 		model=AIM()
 		set_gaussian_pars(stamp,model,weight=weight)
 		
-		print model
 		
 		model.alpha.max=0.75*cutradii[i]
 		model.c1.max=0.5*cutradii[i]
