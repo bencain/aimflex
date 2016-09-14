@@ -132,6 +132,39 @@ def _convert_input(x, y, p, z=None, n_models=1, model_set_axis=0):
 	
 	return farg
 
+def leastsquare(measured_vals, updated_model, weights, x, y=None, p=None):
+    """
+    Least square statistic with optional weights.
+
+    Parameters
+    ----------
+    measured_vals : `~numpy.ndarray`
+        Measured data values.
+    updated_model : `~astropy.modeling.Model`
+        Model with parameters set by the current iteration of the optimizer.
+    weights : `~numpy.ndarray`
+        Array of weights to apply to each residual.
+    x : `~numpy.ndarray`
+        Independent variable "x" to evaluate the model on.
+    y : `~numpy.ndarray`, optional
+        Independent variable "y" to evaluate the model on, for 2D models.
+    p : `~numpy.ndarray`, optional
+    	Fixed model parameters, such as a psf for a 2D image model
+
+    Returns
+    -------
+    res : float
+        The sum of least squares.
+    """
+
+    if y is None and p is None:
+        model_vals = updated_model(x)
+    else:
+        model_vals = updated_model(x, y, p)
+    if weights is None:
+        return np.sum((model_vals - measured_vals) ** 2)
+    else:
+        return np.sum((weights * (model_vals - measured_vals)) ** 2)
 
 class AIMSimplexLSQFitter(am.fitting.SimplexLSQFitter):
     """
@@ -310,11 +343,11 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 		fit = fitter(model,x,y,psf,stamp,maxiter=1000)
 		
 		print fit
-		print np.sum(weight*(stamp-fit(x,y))**2)
+		print np.sum(weight*(stamp-fit(x,y,psf))**2)
 		print stamp.size
 		
-		fits.PrimaryHDU(fit(x,y)).writeto(outname+'_fit.fits',clobber=True)
-		fits.PrimaryHDU(stamp - fit(x,y)).writeto(outname+'_residual.fits',clobber=True)
+		fits.PrimaryHDU(fit(x,y,psf)).writeto(outname+'_fit.fits',clobber=True)
+		fits.PrimaryHDU(stamp - fit(x,y,psf)).writeto(outname+'_residual.fits',clobber=True)
 		
 		
 	
