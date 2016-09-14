@@ -288,7 +288,8 @@ def STUV(E,g,F,G):
 
 
 def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
-				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE'):
+				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE',
+				outdir=None,save_fig=False):
 	"""
 		Using a data image, a weight image, and a Source Extractor-like catalog
 		fit an AIM profile to each of the objects in the catalog, and store the 
@@ -307,9 +308,14 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 	xpix = sextable[xtag].astype(int)
 	ypix = sextable[ytag].astype(int)
 	
-	if psf == None:
+	if psf is None:
 		psf = np.zeros((3,3))
 		psf[1,1]=1.
+		
+	if outdir is None:
+		outdir=""
+	elif (outdir[-1] is not "/") and len(outdir)>1:
+		outdir = outdir +"/"
 	
 	for i in range(cutradii.size):
 		print ("Object %i" % catno[i])
@@ -324,8 +330,8 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 									 (xpix[i]-cutradii[i]):(xpix[i]+cutradii[i]+1)]*mask
 		outname='obj_%04i_output' % catno[i]
 		
-		fits.PrimaryHDU(stamp).writeto(outname+'_stamp.fits',clobber=True)
-		fits.PrimaryHDU(weight).writeto(outname+'_weight.fits',clobber=True)
+		fits.PrimaryHDU(stamp).writeto(outdir+outname+'_stamp.fits',clobber=True)
+		fits.PrimaryHDU(weight).writeto(outdir+outname+'_weight.fits',clobber=True)
 		
 		model=AIM()
 		set_gaussian_pars(stamp,model,weight=weight)
@@ -337,18 +343,18 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 		model.c1.min=-0.5*cutradii[i]
 		model.c2.min=-0.5*cutradii[i]
 		
-# 		fitter=am.fitting.LevMarLSQFitter()
 		fitter=AIMSimplexLSQFitter()
 
 		fit = fitter(model,x,y,psf,stamp,maxiter=1000)
 		
 		print fit
 		print np.sum(weight*(stamp-fit(x,y,psf))**2)
-		print stamp.size
 		
-		fits.PrimaryHDU(fit(x,y,psf)).writeto(outname+'_fit.fits',clobber=True)
-		fits.PrimaryHDU(stamp - fit(x,y,psf)).writeto(outname+'_residual.fits',clobber=True)
+		fits.PrimaryHDU(fit(x,y,psf)).writeto(outdir+outname+'_fit.fits',clobber=True)
+		fits.PrimaryHDU(stamp - fit(x,y,psf)).writeto(outdir+outname+'_residual.fits',clobber=True)
 		
+		if save_fig:
+			triptych(stamp,fit(x,y,psf),resid=(stamp - fit(x,y,psf)),tag=outdir+outname)
 		
 	
 #####################################################################################
@@ -531,14 +537,14 @@ def triptych(data,fit,resid=None,tag='triptych'):
 	"""
 		Make a triptych figure with the data, fit, and residual images.
 	"""
-	if resid == None:
+	if resid is None:
 		resid = data - fit
 		
 	f, (ax1, ax2, ax3) = plt.subplots(1,3)
 
-	ax1.imshow(data,title='Data')
-	ax2.imshow(fit,title='Fit')
-	ax3.imshow(resid,title='Residual')
+	ax1.imshow(data)
+	ax2.imshow(fit)
+	ax3.imshow(resid)
 
 	[a.set_xticks([]) for a in [ax1,ax2,ax3] ]
 	[a.set_yticks([]) for a in [ax1,ax2,ax3] ]
