@@ -88,9 +88,59 @@ class AIM(am.FittableModel):
 
 		if np.any(np.isnan(psf)):
 			return img
+		elif psf is None:
+			return img
 		else:
 			if len(psf.shape) == 2:
 				return cfft(img,psf)
+
+class AIM2(am.FittableModel):
+	"""
+		This class implements an elliptical Sersic source plane model profile 
+		lensed by shear and flexion.  Parameters included:
+			logI	- peak surface brightness
+			index	- Sersic index (0.5 = Gaussian)
+			c1		- image plane x location for beta=0
+			c2		- image plane y location for beta=0
+			1_M1	- coefficient of the x**2 term in the Gaussian argument
+			1_M2	- coefficient of the y**2 term in the Gaussian argument
+			M3		- coefficient of the x*y term in the Gaussian argument
+			g1		- + polarized reduced shear
+			g2		- x polarized reduced shear
+			F1		- reduced 1-Flexion x
+			F2		- reduced 1-Flexion y
+			G1		- reduced 3-Flexion x
+			G2		- reduced 3-Flexion y
+		We also implement a PSF convolution as well.
+	"""
+	inputs = ('x','y','psf',)
+	outputs = ('img',)
+	
+	logI  = am.Parameter(default=1.,max=4.)
+	index = am.Parameter(default=0.5,min=0.01)
+	c1 = 	am.Parameter(default=0.)
+	c2 = 	am.Parameter(default=0.)
+	M1inv = am.Parameter(default=5.,min=1e-3)
+	M2inv = am.Parameter(default=5.,min=1e-3)
+	M3 = 	am.Parameter(default=0.)
+	g1 = 	am.Parameter(default=0.)
+	g2 = 	am.Parameter(default=0.)
+	F1 = 	am.Parameter(default=0.)
+	F2 = 	am.Parameter(default=0.)
+	G1 = 	am.Parameter(default=0.)
+	G2 = 	am.Parameter(default=0.)
+	
+	standard_broadcasting = False
+		
+	@staticmethod
+	def evaluate(x,y,psf,
+				 logI,index,c1,c2,
+				 M1inv,M2inv,M3,g1,g2,F1,F2,G1,G2):	
+				
+		aee = convert_epars([1/M1inv, 1/M2inv, M3],mi_to_pol=True)
+		
+		return AIM.evaluate(x,y,psf,logI,aee[0],index,c1,c2,aee[1],aee[2],
+							g1,g2,F1,F2,G1,G2)
 
 
 def _convert_input(x, y, p, z=None, n_models=1, model_set_axis=0):
@@ -290,7 +340,7 @@ def STUV(E,g,F,G):
 
 def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE',
-				outdir=None,save_fig=False):
+				outdir=None,save_fig=False, maxiter=10000, maxfun=25000):
 	"""
 		Using a data image, a weight image, and a Source Extractor-like catalog
 		fit an AIM profile to each of the objects in the catalog, and store the 
@@ -309,10 +359,6 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 	xpix = sextable[xtag].astype(int)
 	ypix = sextable[ytag].astype(int)
 	
-	if psf is None:
-		psf = np.zeros((3,3))
-		psf[1,1]=1.
-		
 	if outdir is None:
 		outdir=""
 	elif (outdir[-1] is not "/") and len(outdir)>1:
@@ -320,6 +366,8 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 	
 	
 	fit_rows = []
+	fitter=AIMSimplexLSQFitter()
+	
 	for i in range(cutradii.size):
 		print ("Object %i" % catno[i])
 		x,y =np.meshgrid(np.linspace(-cutradii[i],cutradii[i],2*cutradii[i]+1),
@@ -337,18 +385,21 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 		fits.PrimaryHDU(weights).writeto(outdir+outname+'_weight.fits',clobber=True)
 		
 		model=AIM()
+# 		model=AIM2()
 		set_gaussian_pars(stamp,model,weights=weights)
+		initial_cond = model.parameters
 		
-		
-		model.alpha.max=0.75*cutradii[i]
+		if type(model) == AIM:
+			model.alpha.max=0.75*cutradii[i]
+		if type(model) == AIM2:
+			model.M1inv.max = (0.75*cutradii[i])**2
+			model.M2inv.max = (0.75*cutradii[i])**2
 		model.c1.max=0.5*cutradii[i]
 		model.c2.max=0.5*cutradii[i]
 		model.c1.min=-0.5*cutradii[i]
 		model.c2.min=-0.5*cutradii[i]
-		
-		fitter=AIMSimplexLSQFitter()
 
-		fit = fitter(model,x,y,psf,stamp,maxiter=10000,weights=weights)
+		fit = fitter(model,x,y,psf,stamp,maxiter=maxiter,weights=weights,maxfun=maxfun)
 		print fitter.fit_info
 				
 		fits.PrimaryHDU(fit(x,y,psf)).writeto(outdir+outname+'_fit.fits',clobber=True)
@@ -357,18 +408,14 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 		if save_fig:
 			triptych(stamp,fit(x,y,psf),resid=(stamp - fit(x,y,psf)),tag=outdir+outname)
 		
-		
-# 		if weights is None:
-# 			chisq = np.sum((fit(x,y,psf) - stamp) ** 2)
-# 		else:
-# 			chisq = np.sum((weights * (fit(x,y,psf) - stamp)) ** 2)
-		npix = stamp.size
-# 		
-# 		print 'Chisq = ',chisq, ' npix = ',npix
-# 		fit_rows.append(np.append(fit.parameters,[chisq,npix]))
-		fit_rows.append(np.append(fit.parameters,
-								  [fitter.fit_info['final_func_val'],npix]))
-	tabledata = Table(rows=fit_rows,names=AIM.param_names+('chisq','npix',))
+		outrow=np.append(fit.parameters,
+						 [fitter.fit_info['final_func_val'],
+						  stamp.size,
+						  fitter.fit_info['numiter']])
+		outrow=np.append(outrow,initial_cond)
+		fit_rows.append(outrow)
+	outcol_names = AIM.param_names+('chisq','npix','niter',)+tuple([x+'_init' for x in AIM.param_names])
+	tabledata = Table(rows=fit_rows,names=outcol_names)
 	tabledata.write(outdir+outfile,format='ascii')
 	
 #####################################################################################

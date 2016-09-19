@@ -8,6 +8,7 @@ from astropy.io import ascii
 im = '../aimdata/hlsp_frontier_hst_acs-30mas-selfcal_abell2744_f814w_v1.0-epoch2_drz.fits'
 wt = '../aimdata/hlsp_frontier_hst_acs-30mas-selfcal_abell2744_f814w_v1.0-epoch2_wht.fits'
 cat= '../aimdata/short.cat'
+# cat= '../aimdata/test.cat'
 
 aim.fit_dataset(im, wt, cat, 'test_output.txt', rscale=3.,
 				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE',
