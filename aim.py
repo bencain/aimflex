@@ -6,9 +6,10 @@ import matplotlib.pyplot as plt
 import astropy.modeling as am
 from astropy.io import ascii, fits
 from astropy.convolution import convolve_fft as cfft
+from astropy.table import Table
 
 from astropy.modeling.optimizers import Simplex
-from astropy.modeling.statistic import leastsquare
+# from astropy.modeling.statistic import leastsquare
 
 
 class AIM(am.FittableModel):
@@ -237,18 +238,18 @@ class AIMSimplexLSQFitter(am.fitting.SimplexLSQFitter):
 
 
 
-def set_gaussian_pars(image,model,weight=1.):
+def set_gaussian_pars(image,model,weights=1.):
 	"""
 		A function for creating Gaussian model initial parameters from the data and
 		setting them into the model object.
 	"""
 	
-	cts = calc_moments(image,weight=weight)
-	ctr = [calc_moments(image,xord=1,weight=weight)/cts,
-		   calc_moments(image,yord=1,weight=weight)/cts]
-	Q11 = calc_moments(image,xord=2,weight=weight)/cts
-	Q22 = calc_moments(image,yord=2,weight=weight)/cts
-	Q12 = calc_moments(image,xord=1,yord=1,weight=weight)/cts
+	cts = calc_moments(image,weights=weights)
+	ctr = [calc_moments(image,xord=1,weights=weights)/cts,
+		   calc_moments(image,yord=1,weights=weights)/cts]
+	Q11 = calc_moments(image,xord=2,weights=weights)/cts
+	Q22 = calc_moments(image,yord=2,weights=weights)/cts
+	Q12 = calc_moments(image,xord=1,yord=1,weights=weights)/cts
 	
 	m1=Q11-Q12**2/Q22
 	m2=Q22-Q12**2/Q11
@@ -287,7 +288,7 @@ def STUV(E,g,F,G):
 
 
 
-def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
+def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE',
 				outdir=None,save_fig=False):
 	"""
@@ -301,7 +302,7 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 
 	sextable = ascii.read(catalog)
 	img_hdu = fits.open(image)
-	wht_hdu = fits.open(weight)
+	wht_hdu = fits.open(weights)
 	
 	catno=sextable[ntag]
 	cutradii = (sextable[atag]*rscale).astype(int)
@@ -317,6 +318,8 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 	elif (outdir[-1] is not "/") and len(outdir)>1:
 		outdir = outdir +"/"
 	
+	
+	fit_rows = []
 	for i in range(cutradii.size):
 		print ("Object %i" % catno[i])
 		x,y =np.meshgrid(np.linspace(-cutradii[i],cutradii[i],2*cutradii[i]+1),
@@ -326,15 +329,15 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 		stamp = img_hdu[0].data[(ypix[i]-cutradii[i]):(ypix[i]+cutradii[i]+1),\
 									(xpix[i]-cutradii[i]):(xpix[i]+cutradii[i]+1)]*mask
 									
-		weight = wht_hdu[0].data[(ypix[i]-cutradii[i]):(ypix[i]+cutradii[i]+1),\
+		weights = wht_hdu[0].data[(ypix[i]-cutradii[i]):(ypix[i]+cutradii[i]+1),\
 									 (xpix[i]-cutradii[i]):(xpix[i]+cutradii[i]+1)]*mask
 		outname='obj_%04i_output' % catno[i]
 		
 		fits.PrimaryHDU(stamp).writeto(outdir+outname+'_stamp.fits',clobber=True)
-		fits.PrimaryHDU(weight).writeto(outdir+outname+'_weight.fits',clobber=True)
+		fits.PrimaryHDU(weights).writeto(outdir+outname+'_weight.fits',clobber=True)
 		
 		model=AIM()
-		set_gaussian_pars(stamp,model,weight=weight)
+		set_gaussian_pars(stamp,model,weights=weights)
 		
 		
 		model.alpha.max=0.75*cutradii[i]
@@ -345,33 +348,44 @@ def fit_dataset(image, weight, catalog, outfile, rscale=2.,psf=None,
 		
 		fitter=AIMSimplexLSQFitter()
 
-		fit = fitter(model,x,y,psf,stamp,maxiter=1000)
-		
-		print fit
-		print np.sum(weight*(stamp-fit(x,y,psf))**2)
-		
+		fit = fitter(model,x,y,psf,stamp,maxiter=10000,weights=weights)
+		print fitter.fit_info
+				
 		fits.PrimaryHDU(fit(x,y,psf)).writeto(outdir+outname+'_fit.fits',clobber=True)
 		fits.PrimaryHDU(stamp - fit(x,y,psf)).writeto(outdir+outname+'_residual.fits',clobber=True)
 		
 		if save_fig:
 			triptych(stamp,fit(x,y,psf),resid=(stamp - fit(x,y,psf)),tag=outdir+outname)
 		
+		
+# 		if weights is None:
+# 			chisq = np.sum((fit(x,y,psf) - stamp) ** 2)
+# 		else:
+# 			chisq = np.sum((weights * (fit(x,y,psf) - stamp)) ** 2)
+		npix = stamp.size
+# 		
+# 		print 'Chisq = ',chisq, ' npix = ',npix
+# 		fit_rows.append(np.append(fit.parameters,[chisq,npix]))
+		fit_rows.append(np.append(fit.parameters,
+								  [fitter.fit_info['final_func_val'],npix]))
+	tabledata = Table(rows=fit_rows,names=AIM.param_names+('chisq','npix',))
+	tabledata.write(outdir+outfile,format='ascii')
 	
 #####################################################################################
 #################	UTILITIES	#####################################################
 #####################################################################################
 	
-def calc_moments(image,xord=0,yord=0,weight=1.):
+def calc_moments(image,xord=0,yord=0,weights=1.):
 	"""
 		A function for calculating arbitrary xy image moments
 	"""
 	dims=image.shape
 	
 	# Handle weights
-	if not type(weight) == np.ndarray:
+	if not type(weights) == np.ndarray:
 		w = 1.
 	else:
-		w = weight/np.sum(weight) # Normalize
+		w = weights/np.sum(weights) # Normalize
 
 	if xord < 0: # No negative orders
 		xord=0
@@ -382,9 +396,9 @@ def calc_moments(image,xord=0,yord=0,weight=1.):
 					 np.linspace(-(dims[1]-1)/2,(dims[1]-1)/2,dims[1]))
 	
 	if (xord+yord) > 1: # Calc ctr and flux for higher moments
-		cts = calc_moments(image,xord=0,yord=0,weight=w)
-		ctr = [calc_moments(image,xord=1,yord=0,weight=w)/cts,
-			   calc_moments(image,xord=0,yord=1,weight=w)/cts]
+		cts = calc_moments(image,xord=0,yord=0,weights=w)
+		ctr = [calc_moments(image,xord=1,yord=0,weights=w)/cts,
+			   calc_moments(image,xord=0,yord=1,weights=w)/cts]
 	else:
 		ctr=[0.,0.]
 	

@@ -9,7 +9,7 @@ im = '../aimdata/hlsp_frontier_hst_acs-30mas-selfcal_abell2744_f814w_v1.0-epoch2
 wt = '../aimdata/hlsp_frontier_hst_acs-30mas-selfcal_abell2744_f814w_v1.0-epoch2_wht.fits'
 cat= '../aimdata/short.cat'
 
-aim.fit_dataset(im, wt, cat, 'dummy.txt', rscale=3.,
+aim.fit_dataset(im, wt, cat, 'test_output.txt', rscale=3.,
 				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE',
 				outdir='../aimdata/',save_fig=True)
 
