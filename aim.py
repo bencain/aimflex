@@ -411,10 +411,11 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 		outrow=np.append(fit.parameters,
 						 [fitter.fit_info['final_func_val'],
 						  stamp.size,
-						  fitter.fit_info['numiter']])
+						  fitter.fit_info['numiter']
+						  fitter.fit_info['exit_mode']])
 		outrow=np.append(outrow,initial_cond)
 		fit_rows.append(outrow)
-	outcol_names = AIM.param_names+('chisq','npix','niter',)+tuple([x+'_init' for x in AIM.param_names])
+	outcol_names = AIM.param_names+('chisq','npix','niter','exit_mode',)+tuple([x+'_init' for x in AIM.param_names])
 	tabledata = Table(rows=fit_rows,names=outcol_names)
 	tabledata.write(outdir+outfile,format='ascii')
 	
