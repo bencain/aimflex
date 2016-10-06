@@ -216,6 +216,8 @@ def leastsquare(measured_vals, updated_model, weights, x, y=None, p=None):
     else:
         return np.sum((weights * (model_vals - measured_vals)) ** 2)
 
+
+
 class AIMSimplexLSQFitter(am.fitting.SimplexLSQFitter):
     """
 
@@ -283,6 +285,195 @@ class AIMSimplexLSQFitter(am.fitting.SimplexLSQFitter):
         
         am.fitting._fitter_to_model_params(model_copy, fitparams)
         return model_copy
+
+
+
+class AIMLevMarLSQFitter(object):
+    """
+    !!!!!!!!!!!-----------MODIFIED FOR AIM--------------!!!!!!!!!!!
+    Based on the astropy implementation (heavily)
+    
+    Levenberg-Marquardt algorithm and least squares statistic.
+
+    Attributes
+    ----------
+    fit_info : dict
+        The `scipy.optimize.leastsq` result for the most recent fit (see
+        notes).
+
+    Notes
+    -----
+    The ``fit_info`` dictionary contains the values returned by
+    `scipy.optimize.leastsq` for the most recent fit, including the values from
+    the ``infodict`` dictionary it returns. See the `scipy.optimize.leastsq`
+    documentation for details on the meaning of these values. Note that the
+    ``x`` return value is *not* included (as it is instead the parameter values
+    of the returned model).
+
+    Additionally, one additional element of ``fit_info`` is computed whenever a
+    model is fit, with the key 'param_cov'. The corresponding value is the
+    covariance matrix of the parameters as a 2D numpy array.  The order of the
+    matrix elements matches the order of the parameters in the fitted model
+    (i.e., the same order as ``model.param_names``).
+    """
+
+    supported_constraints = ['fixed', 'tied', 'bounds']
+    """
+    The constraint types supported by this fitter type.
+    """
+
+    def __init__(self):
+        self.fit_info = {'nfev': None,
+                         'fvec': None,
+                         'fjac': None,
+                         'ipvt': None,
+                         'qtf': None,
+                         'message': None,
+                         'ierr': None,
+                         'param_jac': None,
+                         'param_cov': None}
+
+        super(AIMLevMarLSQFitter, self).__init__()
+
+    def objective_function(self, fps, *args):
+        """
+        Function to minimize.
+
+        Parameters
+        ----------
+        fps : list
+            parameters returned by the fitter
+        args : list
+            [model, [weights], [input coordinates]]
+        """
+
+        model = args[0]
+        weights = args[1]
+        _fitter_to_model_params(model, fps)
+        meas = args[-1]
+        if weights is None:
+            return np.ravel(model(*args[2 : -1]) - meas)
+        else:
+            return np.ravel(weights * (model(*args[2 : -1]) - meas))
+
+    def __call__(self, model, x, y, p, z=None, weights=None,
+                 maxiter=DEFAULT_MAXITER, acc=DEFAULT_ACC,
+                 epsilon=DEFAULT_EPS, estimate_jacobian=False):
+
+        """
+        Fit data to this model.
+
+        Parameters
+        ----------
+        model : `~astropy.modeling.FittableModel`
+            model to fit to x, y, z
+        x : array
+           input coordinates
+        y : array
+           input coordinates
+        p : array
+        	additional parameter input (e.g., PSF)
+        z : array (optional)
+           input coordinates
+        weights : array (optional)
+           weights
+        maxiter : int
+            maximum number of iterations
+        acc : float
+            Relative error desired in the approximate solution
+        epsilon : float
+            A suitable step length for the forward-difference
+            approximation of the Jacobian (if model.fjac=None). If
+            epsfcn is less than the machine precision, it is
+            assumed that the relative errors in the functions are
+            of the order of the machine precision.
+        estimate_jacobian : bool
+            If False (default) and if the model has a fit_deriv method,
+            it will be used. Otherwise the Jacobian will be estimated.
+            If True, the Jacobian will be estimated in any case.
+
+        Returns
+        -------
+        model_copy : `~astropy.modeling.FittableModel`
+            a copy of the input model with parameters set by the fitter
+        """
+
+        from scipy import optimize
+
+        model_copy = _validate_model(model, self.supported_constraints)
+        farg = (model_copy, weights, ) + _convert_input(x, y, z)
+
+        if model_copy.fit_deriv is None or estimate_jacobian:
+            dfunc = None
+        else:
+            dfunc = self._wrap_deriv
+        init_values, _ = _model_to_fit_params(model_copy)
+        fitparams, cov_x, dinfo, mess, ierr = optimize.leastsq(
+            self.objective_function, init_values, args=farg, Dfun=dfunc,
+            col_deriv=model_copy.col_fit_deriv, maxfev=maxiter, epsfcn=epsilon,
+            xtol=acc, full_output=True)
+        _fitter_to_model_params(model_copy, fitparams)
+        self.fit_info.update(dinfo)
+        self.fit_info['cov_x'] = cov_x
+        self.fit_info['message'] = mess
+        self.fit_info['ierr'] = ierr
+        if ierr not in [1, 2, 3, 4]:
+            warnings.warn("The fit may be unsuccessful; check "
+                          "fit_info['message'] for more information.",
+                          AstropyUserWarning)
+
+        # now try to compute the true covariance matrix
+        if (len(y) > len(init_values)) and cov_x is not None:
+            sum_sqrs = np.sum(self.objective_function(fitparams, *farg)**2)
+            dof = len(y) - len(init_values)
+            self.fit_info['param_cov'] = cov_x * sum_sqrs / dof
+        else:
+            self.fit_info['param_cov'] = None
+
+        return model_copy
+
+    @staticmethod
+    def _wrap_deriv(params, model, weights, x, y, z=None):
+        """
+        Wraps the method calculating the Jacobian of the function to account
+        for model constraints.
+
+        `scipy.optimize.leastsq` expects the function derivative to have the
+        above signature (parlist, (argtuple)). In order to accommodate model
+        constraints, instead of using p directly, we set the parameter list in
+        this function.
+        """
+
+        if weights is None:
+            weights = 1.0
+
+        if any(model.fixed.values()) or any(model.tied.values()):
+
+            if z is None:
+                full_deriv = np.ravel(weights) * np.array(model.fit_deriv(x, *model.parameters))
+            else:
+                full_deriv = (np.ravel(weights) * np.array(model.fit_deriv(x, y, *model.parameters)).T).T
+
+            pars = [getattr(model, name) for name in model.param_names]
+            fixed = [par.fixed for par in pars]
+            tied = [par.tied for par in pars]
+            tied = list(np.where([par.tied is not False for par in pars],
+                                 True, tied))
+            fix_and_tie = np.logical_or(fixed, tied)
+            ind = np.logical_not(fix_and_tie)
+
+            if not model.col_fit_deriv:
+                full_deriv = np.asarray(full_deriv).T
+                residues = np.asarray(full_deriv[np.nonzero(ind)]).T
+            else:
+                residues = full_deriv[np.nonzero(ind)]
+
+            return [np.ravel(_) for _ in residues]
+        else:
+            if z is None:
+                return [np.ravel(_) for _ in np.ravel(weights) * np.array(model.fit_deriv(x, *params))]
+            else:
+                return [np.ravel(_) for _ in (np.ravel(weights) * np.array(model.fit_deriv(x, y, *params)).T).T]
 
 
 
