@@ -28,7 +28,8 @@ def triptych(data,fit,resid=None,tag='triptych'):
 
 def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 				ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE',
-				outdir=None,save_fig=False, maxiter=10000, maxfun=25000):
+				outdir=None,save_fig=False, maxiter=10000, maxfun=25000,
+				simplex=True):
 	"""
 		Using a data image, a weight image, and a Source Extractor-like catalog
 		fit an AIM profile to each of the objects in the catalog, and store the 
@@ -54,7 +55,11 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 	
 	
 	fit_rows = []
-	fitter=AIMSimplexLSQFitter()
+	if simplex:
+		print "o hello simplex"
+		fitter=AIMSimplexLSQFitter()
+	else:
+		fitter=AIMLevMarLSQFitter()
 	
 	for i in range(cutradii.size/40):
 		print ("Object %i of %i" % (catno[i],cutradii.size))
@@ -91,7 +96,10 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 		model.c1.min=-0.5*cutradii[i]
 		model.c2.min=-0.5*cutradii[i]
 
-		fit = fitter(model,x,y,psf,stamp,maxiter=maxiter,weights=weights,maxfun=maxfun)
+		if simplex:
+			fit = fitter(model,x,y,psf,stamp,maxiter=maxiter,weights=weights,maxfun=maxfun)
+		else:
+			fit = fitter(model,x,y,psf,stamp,maxiter=maxiter,weights=weights)
 		print fitter.fit_info
 		print "Initial: ",initial_cond
 		print "Final  : ",fit.parameters

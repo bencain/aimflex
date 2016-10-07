@@ -7,6 +7,11 @@ from astropy.modeling.mappings import Identity
 
 from .parameter_utils import *
 
+DEFAULT_MAXITER = 100
+DEFAULT_ACC = 1e-07
+DEFAULT_EPS = np.sqrt(np.finfo(float).eps)
+
+
 class AIM(am.FittableModel):
 	"""
 		This class implements an elliptical Sersic source plane model profile 
@@ -349,7 +354,7 @@ class AIMLevMarLSQFitter(object):
 
         model = args[0]
         weights = args[1]
-        _fitter_to_model_params(model, fps)
+        am.fitting._fitter_to_model_params(model, fps)
         meas = args[-1]
         if weights is None:
             return np.ravel(model(*args[2 : -1]) - meas)
@@ -400,19 +405,19 @@ class AIMLevMarLSQFitter(object):
 
         from scipy import optimize
 
-        model_copy = _validate_model(model, self.supported_constraints)
-        farg = (model_copy, weights, ) + _convert_input(x, y, z)
+        model_copy = am.fitting._validate_model(model, self.supported_constraints)
+        farg = (model_copy, weights, ) + _convert_input(x, y, p, z)
 
         if model_copy.fit_deriv is None or estimate_jacobian:
             dfunc = None
         else:
             dfunc = self._wrap_deriv
-        init_values, _ = _model_to_fit_params(model_copy)
+        init_values, _ = am.fitting._model_to_fit_params(model_copy)
         fitparams, cov_x, dinfo, mess, ierr = optimize.leastsq(
             self.objective_function, init_values, args=farg, Dfun=dfunc,
             col_deriv=model_copy.col_fit_deriv, maxfev=maxiter, epsfcn=epsilon,
             xtol=acc, full_output=True)
-        _fitter_to_model_params(model_copy, fitparams)
+        am.fitting._fitter_to_model_params(model_copy, fitparams)
         self.fit_info.update(dinfo)
         self.fit_info['cov_x'] = cov_x
         self.fit_info['message'] = mess
