@@ -1,0 +1,12 @@
+MANIFEST.in
+README.rst
+aimflex/__init__.py
+aimflex/aim.py
+aimflex/dataset_utils.py
+aimflex/parameter_utils.py
+aimflex.egg-info/PKG-INFO
+aimflex.egg-info/SOURCES.txt
+aimflex.egg-info/dependency_links.txt
+aimflex.egg-info/not-zip-safe
+aimflex.egg-info/requires.txt
+aimflex.egg-info/top_level.txt
