@@ -336,7 +336,8 @@ class AIMLevMarLSQFitter(object):
                          'message': None,
                          'ierr': None,
                          'param_jac': None,
-                         'param_cov': None}
+                         'param_cov': None,
+                         'final_func_val':None}
 
         super(AIMLevMarLSQFitter, self).__init__()
 

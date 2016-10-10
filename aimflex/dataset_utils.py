@@ -100,7 +100,7 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 			fit = fitter(model,x,y,psf,stamp,maxiter=maxiter,weights=weights,maxfun=maxfun)
 		else:
 			fit = fitter(model,x,y,psf,stamp,maxiter=maxiter,weights=weights)
-		print fitter.fit_info
+		print fitter.fit_info.keys()
 		print "Initial: ",initial_cond
 		print "Final  : ",fit.parameters
 		

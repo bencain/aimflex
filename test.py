@@ -5,14 +5,14 @@ import aimflex
 # from astropy.modeling import fitting
 # from astropy.io import ascii
 
-im = 'aimdata/hlsp_frontier_hst_acs-30mas-selfcal_abell2744_f814w_v1.0-epoch2_drz.fits'
-wt = 'aimdata/hlsp_frontier_hst_acs-30mas-selfcal_abell2744_f814w_v1.0-epoch2_wht.fits'
-cat= 'aimdata/test.cat'
+im = '../../flexion_development/aimdata/hlsp_frontier_hst_acs-30mas-selfcal_abell2744_f814w_v1.0-epoch2_drz.fits'
+wt = '../../flexion_development/aimdata/hlsp_frontier_hst_acs-30mas-selfcal_abell2744_f814w_v1.0-epoch2_wht.fits'
+cat= '../../flexion_development/aimdata/test.cat'
 # cat= 'aimdata/test.cat'
 
 aimflex.fit_dataset(im, wt, cat, 'test_output.txt', rscale=3.,
 					ntag='NUMBER',xtag='X_IMAGE',ytag='Y_IMAGE',atag='A_IMAGE',
-					outdir='out/',save_fig=True,simplex=False)
+					outdir='../../flexion_development/out/',save_fig=True,simplex=False)
 
 # 
 # alpha=4.
