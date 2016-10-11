@@ -659,3 +659,55 @@ class sersic(am.FittableModel):
 		## WINDOW THE IMAGE 
 		return window_image(out)
 
+
+def finite_diff_hessian(model,data,*argpars,**kwargs):
+	
+	if 'step' not in kwargs:
+		step=1e-6
+	elif kwargs['step'] is None:
+		step=1e-6
+	else:
+		step=kwargs['step']
+	
+	if 'weights' not in kwargs:
+		weights=1
+	elif kwargs['weights'] is None:
+		weights=1
+	else:
+		weights=kwargs['weights']
+	
+	model_copy = model.copy()
+	pnames=np.copy(model_copy.param_names)
+	pvals =np.copy(model_copy.parameters)
+	
+	h = np.array(step)
+	if h.size == 1:
+		h = h*np.ones(pvals.size)
+	if h.size < pvals.size:
+		h = h[0]*np.ones(pvals.size)
+	
+	def fcn1(h,k):
+		model_copy.parameters=pvals
+		model_copy.parameters[k]=pvals[k]+h
+		return np.sum(weights*(model_copy(*argpars) - data)**2)
+	def fcn2(h1,h2,k1,k2):
+		model_copy.parameters=pvals
+		model_copy.parameters[k1]=pvals[k1]+h1
+		model_copy.parameters[k2]=pvals[k2]+h2
+		return np.sum(weights*(model_copy(*argpars) - data)**2)
+	
+	
+	hess = np.zeros((pvals.size,pvals.size))
+	for i in range(pvals.size):
+		for j in np.arange(i,pvals.size):
+			if i==j:
+				hess[i,j] = (-fcn1(2*h[i],i) + 16*fcn1(h[i],i) - 30*fcn1(0,i) + 16*fcn1(-h[i],i) - fcn1(-2*h[i],i))/(12*h[i]**2)
+			else:
+				hess[i,j] = (fcn2(h[i],h[j],i,j) - fcn2(h[i],-h[j],i,j) - fcn2(-h[i],h[j],i,j) + fcn2(-h[i],-h[j],i,j))/(4*h[i]*h[j])
+				hess[j,i] = hess[i,j]
+				
+	return hess
+
+
+
+
