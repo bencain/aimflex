@@ -99,7 +99,9 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 		if simplex:
 			fit = fitter(model,x,y,psf,stamp,maxiter=maxiter,weights=weights,maxfun=maxfun)
 		else:
-			fit = fitter(model,x,y,psf,stamp,maxiter=maxiter,weights=weights)
+			# Run MCMC with emcee
+			import emcee
+			
 		print fitter.fit_info.keys()
 		print "Initial: ",initial_cond
 		print "Final  : ",fit.parameters
