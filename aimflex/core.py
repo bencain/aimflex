@@ -79,10 +79,10 @@ class sersic(am.FittableModel):
 	outputs = ('img',)
 
 	logI  = am.Parameter(default=1.,max=4.)
-	alpha = am.Parameter(default=1.,min=0.)
+	alpha = am.Parameter(default=5.,min=0.1)
 	index = am.Parameter(default=0.5,min=0.01,max=20.)
-	E1 = 	am.Parameter(default=0.,min=-1,max=1)
-	E2 = 	am.Parameter(default=0.,min=-1,max=1)
+	E1 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
+	E2 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
 	
 	standard_broadcasting = False
 		
@@ -104,10 +104,12 @@ class sersic(am.FittableModel):
 		
 		# Ellipse parameters
 		ellipse = convert_epars([alpha,E1,E2],pol_to_ae=True)
+		
 		a = ellipse[0]
 		b = ellipse[0]*ellipse[1]
 		pa = ellipse[2]
-
+		print alpha, E1, E1
+		print a,b,pa
 						
 		# Now for the model:
 		beta = x+1j*y
@@ -189,7 +191,7 @@ def AIM_lnprob(pars, model, x, y, psf, data, weights):
 		then we restrict those parameters to be less than the global 
 		E_LIMIT
 	"""
-	for pn in model.parameter_names:
+	for pn in model.param_names:
 		min = getattr(model,pn).min
 		max = getattr(model,pn).max
 		val = getattr(model,pn).value
@@ -210,7 +212,7 @@ def AIM_lnprob(pars, model, x, y, psf, data, weights):
 	model.parameters = pars
 	return -leastsquare(data, model, weights, x, y, psf)
 
-def fit_image(model,data,weights,psf):
+def fit_image(model,data,weights,psf,verbose=False):
 	"""
 		Use emcee to find the best parameter fit plus errors. Takes as
 		input:
@@ -234,7 +236,10 @@ def fit_image(model,data,weights,psf):
 					 np.linspace(-axes[1],axes[1],2*axes[1]+1))
 	
 	p0 = model.parameters
-	sampler = emcee.EnsembleSampler(nwalkers, model.parameters.size, 
+	print p0
+	print model.param_names
+	print p0.shape
+	sampler = emcee.EnsembleSampler(N_WALKERS, model.parameters.size, 
 									AIM_lnprob, 
 									args=[model, x, y, psf, data, weights])
 	
@@ -244,5 +249,15 @@ def fit_image(model,data,weights,psf):
 	
 	# Now the main run
 	sampler.run_mcmc(pos, N_CHAIN)
-	
+
+	if verbose:
+		print("Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
+    	
+    	import matplotlib.pyplot as pl
+    	for i,pn in enumerate(model.param_names):
+    		pl.figure()
+    		pl.hist(sampler.flatchain[:,i], 100, color="k", histtype="step")
+    		pl.title("Dimension {}".format(pn))
+			
+		pl.show()
 	
