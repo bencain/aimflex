@@ -223,9 +223,7 @@ def leastsquare(measured_vals, updated_model, weights, x, y=None, p=None):
 
 
 def AIM_lnprob(pars, model, x, y, psf, data, weights):
-	model.parameters = parsexit
-	
-	
+	model.parameters = pars	
 	return -leastsquare(data, model, weights, x, y, psf)
 
 
