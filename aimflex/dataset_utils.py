@@ -1,7 +1,7 @@
 from astropy.io import ascii, fits
 import numpy as np
 
-from .aim import *
+from .core import *
 
 
 def triptych(data,fit,resid=None,tag='triptych'):
