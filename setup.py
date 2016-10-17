@@ -16,5 +16,6 @@ setup(name='aimflex',
       install_requires=[
       	'astropy',
       	'numpy',
+      	'emcee'
       ],
       zip_safe=False)

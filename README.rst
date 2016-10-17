@@ -4,6 +4,7 @@ Developed in Python 2.7
 Requires: 
 	numpy
 	astropy
+	emcee
 
 To install:
 /path/to/aimflex:$ pip install .
