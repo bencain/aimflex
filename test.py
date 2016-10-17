@@ -13,6 +13,9 @@ cat= '../../flexion_development/aimdata/test.cat'
 
 m = aimflex.get_AIM()
 
+m.E1_2 = 0.5
+m.F2_0 = -0.02
+
 dims = (51,51)
 x,y =np.meshgrid(np.linspace(-(dims[0]-1)/2,(dims[0]-1)/2,dims[0]),
 					 np.linspace(-(dims[1]-1)/2,(dims[1]-1)/2,dims[1]))
@@ -22,7 +25,8 @@ p[1,1]=1
 data = m(x,y,p)
 weights = np.ones(dims)
 
-pyplot.imshow(data)
-pyplot.show()
+# pyplot.ion()
+# pyplot.imshow(data)
+# pyplot.show()
 
-aimflex.fit_image(m,data,weights,p,verbose=False)
+aimflex.fit_image(m,data,weights,p,verbose=True)

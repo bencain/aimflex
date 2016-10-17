@@ -8,9 +8,9 @@ from astropy.modeling.mappings import Identity
 from .utilities import *
 
 ################# CONSTANTS #########################
-N_WALKERS = 250		# emcee walkers
-N_BURN = 100		# emcee burn in steps
-N_CHAIN = 1000		# emcee MCMC steps per walker
+N_WALKERS = 100		# emcee walkers
+N_BURN = 100			# emcee burn in steps
+N_CHAIN = 10000		# emcee MCMC steps per walker
 
 E_LIMIT = 0.9		# Ellipticity magnitude limit
 ################# CLASSES ###########################
@@ -108,8 +108,6 @@ class sersic(am.FittableModel):
 		a = ellipse[0]
 		b = ellipse[0]*ellipse[1]
 		pa = ellipse[2]
-		print alpha, E1, E1
-		print a,b,pa
 						
 		# Now for the model:
 		beta = x+1j*y
@@ -234,11 +232,8 @@ def fit_image(model,data,weights,psf,verbose=False):
 	axes = [(s-1)/2. for s in data.shape[::-1]]
 	x,y =np.meshgrid(np.linspace(-axes[0],axes[0],2*axes[0]+1),
 					 np.linspace(-axes[1],axes[1],2*axes[1]+1))
-	
-	p0 = model.parameters
-	print p0
-	print model.param_names
-	print p0.shape
+		
+	p0 = np.repeat(model.parameters,N_WALKERS).reshape((model.parameters.size,N_WALKERS)).transpose()
 	sampler = emcee.EnsembleSampler(N_WALKERS, model.parameters.size, 
 									AIM_lnprob, 
 									args=[model, x, y, psf, data, weights])
@@ -252,12 +247,11 @@ def fit_image(model,data,weights,psf,verbose=False):
 
 	if verbose:
 		print("Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
-    	
-    	import matplotlib.pyplot as pl
-    	for i,pn in enumerate(model.param_names):
-    		pl.figure()
-    		pl.hist(sampler.flatchain[:,i], 100, color="k", histtype="step")
-    		pl.title("Dimension {}".format(pn))
-			
-		pl.show()
+		import matplotlib.pyplot as pl
+		for i,pn in enumerate(model.param_names):
+			pl.ion()
+			pl.figure()
+			pl.hist(sampler.flatchain[:,i], 100, color="k", histtype="step")
+			pl.title("Dimension {}".format(pn))
+			pl.ioff()
 	
