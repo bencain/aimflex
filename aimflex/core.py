@@ -129,6 +129,74 @@ class sersic(am.FittableModel):
 		return window_image(out)
 
 
+class AIMSimplexLSQFitter(am.fitting.SimplexLSQFitter):
+    """
+
+    Simplex algorithm and least squares statistic.
+
+    Raises
+    ------
+    ModelLinearityError
+        A linear model is passed to a nonlinear fitter
+
+    """
+
+    supported_constraints = Simplex.supported_constraints
+
+    def __init__(self):
+        super(am.fitting.SimplexLSQFitter, self).__init__(optimizer=Simplex,
+                                                  statistic=leastsquare)
+        self.fit_info = {}
+
+
+
+    def __call__(self, model, x, y, p, z=None, weights=None, **kwargs):
+        """
+        Fit data to this model.
+
+        Parameters
+        ----------
+        model : `~astropy.modeling.FittableModel`
+            model to fit to x, y, p, z
+        x : array
+            input coordinates
+        y : array
+            input coordinates
+        p : array
+        	additional parameter input (e.g., PSF)
+        z : array (optional)
+            input coordinates
+        weights : array (optional)
+            weights
+        kwargs : dict
+            optional keyword arguments to be passed to the optimizer or the statistic  		
+
+        maxiter : int
+            maximum number of iterations
+        epsilon : float
+            the step size for finite-difference derivative estimates
+        acc : float
+            Relative error in approximate solution
+
+        Returns
+        -------
+        model_copy : `~astropy.modeling.FittableModel`
+            a copy of the input model with parameters set by the fitter
+        """
+
+        model_copy = am.fitting._validate_model(model,
+                                     self._opt_method.supported_constraints)
+        
+        farg = _convert_input(x, y, p, z,n_models=len(model_copy))
+        farg = (model_copy, weights, ) + farg
+
+        p0, _ = am.fitting._model_to_fit_params(model_copy)
+		
+        fitparams, self.fit_info = self._opt_method(self.objective_function, p0, farg, **kwargs)
+        
+        am.fitting._fitter_to_model_params(model_copy, fitparams)
+        return model_copy
+
 
 ################# METHODS ###########################
 
