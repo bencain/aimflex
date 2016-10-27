@@ -26,8 +26,11 @@ p[1,1]=1
 data = m(x,y,p)
 weights = np.ones(dims)
 
-pyplot.ion()
-pyplot.imshow(data)
-pyplot.show()
+# pyplot.ion()
+# pyplot.imshow(data)
+# pyplot.show()
 
-# aimflex.fit_image(m,data,weights,p,verbose=True)
+chain = aimflex.fit_image(m,data,weights,p,verbose=True)
+
+for i in range(m.parameters.size):
+	print i, len(set(chain[:,:,i].flatten()))

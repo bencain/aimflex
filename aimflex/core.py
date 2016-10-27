@@ -4,13 +4,14 @@ import emcee
 
 from astropy.convolution import convolve_fft as cfft
 from astropy.modeling.mappings import Identity
+from astropy.modeling.fitting import Simplex
 
 from .utilities import *
 
 ################# CONSTANTS #########################
 N_WALKERS = 100		# emcee walkers
 N_BURN = 100			# emcee burn in steps
-N_CHAIN = 10000		# emcee MCMC steps per walker
+N_CHAIN = 1000		# emcee MCMC steps per walker
 
 E_LIMIT = 0.9		# Ellipticity magnitude limit
 ################# CLASSES ###########################
@@ -245,6 +246,29 @@ def leastsquare(measured_vals, model, weights, x, y=None, p=None):
         return np.sum((weights * (model_vals - measured_vals)) ** 2)
 
 
+def AIM_lnprior(pars,model):
+	"""
+		log of the probability 
+	"""
+	for pn in model.param_names:
+		min = getattr(model,pn).min
+		max = getattr(model,pn).max
+		val = getattr(model,pn).value
+		
+		if min is not None:
+			if val < min:
+				return -np.inf
+		if max is not None:
+			if val > max:
+				return -np.inf
+	if hasattr(model,'E1_2') and hasattr(model,'E1_2'):
+		# IF THE ELLIPTICITY OF THE MODEL PROFILE IS IN
+		# THE SHEAR-DEGENERATE PARAMETRIZATION, WE CHECK
+		# THE ELLIPTICITY MAGNITUDE FOR COMPLIANCE
+		if (model.E1_2**2 + model.E2_2**2) >= E_LIMIT:
+			return -np.inf
+	return 0.
+
 def AIM_lnprob(pars, model, x, y, psf, data, weights):
 	"""
 		Log of the probability distribution, using the leastsquare 
@@ -257,25 +281,12 @@ def AIM_lnprob(pars, model, x, y, psf, data, weights):
 		then we restrict those parameters to be less than the global 
 		E_LIMIT
 	"""
-	for pn in model.param_names:
-		min = getattr(model,pn).min
-		max = getattr(model,pn).max
-		val = getattr(model,pn).value
-		
-		if min is not None:
-			if val < min:
-				return -1e9
-		if max is not None:
-			if val > max:
-				return -1e9
-	if hasattr(model,'E1_2') and hasattr(model,'E1_2'):
-		# IF THE ELLIPTICITY OF THE MODEL PROFILE IS IN
-		# THE SHEAR-DEGENERATE PARAMETRIZATION, WE CHECK
-		# THE ELLIPTICITY MAGNITUDE FOR COMPLIANCE
-		if (model.E1_2**2 + model.E2_2**2) >= E_LIMIT:
-			return -1e9
-
 	model.parameters = pars
+	lp = AIM_lnprior(pars,model)
+	print lp
+	if not np.isfinite(lp):
+		return -np.inf
+	
 	return -leastsquare(data, model, weights, x, y, psf)
 
 def fit_image(model,data,weights,psf,verbose=False):
@@ -323,3 +334,4 @@ def fit_image(model,data,weights,psf,verbose=False):
 			pl.title("Dimension {}".format(pn))
 			pl.ioff()
 	
+	return sampler.chain
