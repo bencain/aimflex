@@ -283,7 +283,7 @@ def AIM_lnprob(pars, model, x, y, psf, data, weights):
 	"""
 	model.parameters = pars
 	lp = AIM_lnprior(pars,model)
-	print lp
+	print lp,pars
 	if not np.isfinite(lp):
 		return -np.inf
 	
