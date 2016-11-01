@@ -5,13 +5,15 @@ def set_gaussian_pars(image,model,weights=1.):
 		A function for creating Gaussian model initial parameters from 
 		the data and setting them into the model object.
 	"""
+	mod_image = np.copy(image)
+	mod_image[mod_image<0] = 0.
 	
-	cts = calc_moments(image,weights=weights)
-	ctr = [calc_moments(image,xord=1,weights=weights)/cts,
-		   calc_moments(image,yord=1,weights=weights)/cts]
-	Q11 = calc_moments(image,xord=2,weights=weights)/cts
-	Q22 = calc_moments(image,yord=2,weights=weights)/cts
-	Q12 = calc_moments(image,xord=1,yord=1,weights=weights)/cts
+	cts = calc_moments(mod_image,weights=weights)
+	ctr = [calc_moments(mod_image,xord=1,weights=weights)/cts,
+		   calc_moments(mod_image,yord=1,weights=weights)/cts]
+	Q11 = calc_moments(mod_image,xord=2,weights=weights)/cts
+	Q22 = calc_moments(mod_image,yord=2,weights=weights)/cts
+	Q12 = calc_moments(mod_image,xord=1,yord=1,weights=weights)/cts
 	
 	m1=Q11-Q12**2/Q22
 	m2=Q22-Q12**2/Q11
@@ -19,19 +21,56 @@ def set_gaussian_pars(image,model,weights=1.):
 	
 	epars = convert_epars([m1,m2,m3],mi_to_pol=True)
 	
-	logI=np.log10(cts/(2*np.pi*epars[0]**2))
+# 	logI=np.log10(cts/(2*np.pi*epars[0]**2))
+	logI=np.log10(np.amax(mod_image))
 	
-	model.logI = logI
-	model.c1=ctr[0]
-	model.c2=ctr[1]
-	model.alpha=epars[0]
-	if hasattr(model,'E1'):
-		model.E1=epars[1]
-		model.E2=epars[2]
-	elif hasattr(model,'S1'):
-		model.S1=epars[1]
-		model.S2=epars[2]
+	# Set the parameters for a gaussian
+	model.c1_0=ctr[0]
+	model.c2_0=ctr[1]
 
+	model.logI_2 = logI
+	model.alpha_2=epars[0]
+	model.index_2=0.5
+	model.E1_2=epars[1]
+	model.E2_2=epars[2]
+	
+	# Zero out the lensing distortions
+	model.g1_0 = 0.
+	model.g2_0 = 0.
+	model.F1_0 = 0.
+	model.F2_0 = 0.
+	model.G1_0 = 0.
+	model.G2_0 = 0.
+	
+	
+def set_limits(image,model):
+	"""
+		This function uses the image dimensions to set the maximum and minimum
+		parameter values for the centroid and scale factor AIM model parameters,
+		as well as the flexion parameters.
+	"""
+	
+	dims = image.shape
+	model.c1_0.max =  0.5*dims[0]
+	model.c1_0.min = -0.5*dims[0]
+	model.c2_0.max =  0.5*dims[1]
+	model.c2_0.min = -0.5*dims[1]
+	
+	model.alpha_2.max = max(dims)
+	model.alpha_2.min = 1e-1
+	
+	model.logI_2.max = np.log10(np.amax(image)*np.product(dims))
+	model.logI_2.min = np.log10(np.amin(image[image>0]))
+	
+	model.F1_0.max =  1./max(dims)
+	model.F1_0.min = -1./max(dims)
+	model.F2_0.max =  1./max(dims)
+	model.F2_0.min = -1./max(dims)
+
+	model.G1_0.max =  1./max(dims)
+	model.G1_0.min = -1./max(dims)
+	model.G2_0.max =  1./max(dims)
+	model.G2_0.min = -1./max(dims)
 
 def window_image(image):
 	"""
@@ -129,7 +168,7 @@ def convert_epars(epars,
 			 coefficient M3 from
 			 r^2 = ((x-X_c)^2/M1^2 + (y-Y_c)^2/M2 + 2*M3*(x-X_c)*(y-Y_c))
 	"""
-	outpars=np.copy(epars)
+
 	if np.isscalar(epars):
 		print "aim.convert_epars requires a 3 element iterable input."
 		print " -> this looks like a scalar: ",epars
@@ -172,7 +211,7 @@ def convert_epars(epars,
 		eplus= (1.-eps)*np.cos(2.*xi)/(1.+eps)
 		ecross=(1.-eps)*np.sin(2.*xi)/(1.+eps)
 		
-		outpars[0:3]=alpha,eplus,ecross
+		outpars=[alpha,eplus,ecross]
 
 	elif pol_to_mi:
 		alpha=epars[0]
@@ -192,7 +231,7 @@ def convert_epars(epars,
 		m2=alpha**2*(1. - emag**2)/(1. + emag**2 + 2.*eplus)
 		m3=-2.*ecross/(alpha**2*(1. -emag**2))
 
-		outpars[0:3]=m1,m2,m3
+		outpars=[m1,m2,m3]
 
 	elif pol_to_ae:
 		alpha=epars[0]
@@ -208,10 +247,15 @@ def convert_epars(epars,
 		
 		# E = ( Q11 - Q22 + 2iQ12 )/( Q11 + Q22 +2sqrt( Q11*Q22 - Q12^2 ) )
 		eps=(1. - emag)/(1. + emag)
-		A=alpha/np.sqrt(eps)
+		if eps <1e-7:
+			eps=1e-7
+			A = 1e-7
+		else:
+			A=alpha/np.sqrt(eps)
+		
 		xi=0.5*np.arctan2(ecross,eplus)
 
-		outpars[0:3]=A,eps,xi
+		outpars=[A,eps,xi]
 
 	elif mi_to_pol:
 		m1=epars[0]
@@ -229,7 +273,7 @@ def convert_epars(epars,
 		eplus=(m1 - m2)/(m1 + m2 + 2.*np.sqrt(m1*m2 - (m1*m2*m3)**2))
 		ecross=-2.*m1*m2*m3/(m1 + m2 + 2*np.sqrt(m1*m2 - (m1*m2*m3)**2))
 
-		outpars[0:3]=alpha,eplus,ecross
+		outpars=[alpha,eplus,ecross]
 
 	elif ae_to_mi:
 		outpars=convert_epars(convert_epars(epars,ae_to_pol=True),pol_to_mi=True)

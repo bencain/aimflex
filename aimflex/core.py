@@ -9,9 +9,12 @@ from astropy.modeling.fitting import Simplex
 from .utilities import *
 
 ################# CONSTANTS #########################
-N_WALKERS = 100		# emcee walkers
-N_BURN = 100			# emcee burn in steps
-N_CHAIN = 1000		# emcee MCMC steps per walker
+N_WALKERS = 250		# emcee walkers
+N_BURN = 0			# emcee burn in steps
+N_CHAIN = 500		# emcee MCMC steps per walker
+
+P0_SCALE = 5e-3		# Size of random offsets to the
+					# initial parameter guess.
 
 E_LIMIT = 0.9		# Ellipticity magnitude limit
 ################# CLASSES ###########################
@@ -37,8 +40,8 @@ class lens_equation(am.FittableModel):
 	
 	c1 = 	am.Parameter(default=0.)
 	c2 = 	am.Parameter(default=0.)
-	g1 = 	am.Parameter(default=0.)
-	g2 = 	am.Parameter(default=0.)
+	g1 = 	am.Parameter(default=0.,max=5.,min=-5.)
+	g2 = 	am.Parameter(default=0.,max=5.,min=-5.)
 	F1 = 	am.Parameter(default=0.)
 	F2 = 	am.Parameter(default=0.)
 	G1 = 	am.Parameter(default=0.)
@@ -59,8 +62,8 @@ class lens_equation(am.FittableModel):
 		coo = theta - theta0
 		coo_c = np.conj(coo)
 		
-		beta = coo - g*coo_c - np.conj(F)*coo**2 \
-				- 2*F*coo*coo_c - G*coo_c**2 				
+		beta = coo - g*coo_c - 0.25*np.conj(F)*coo**2 \
+				- 0.5*F*coo*coo_c - 0.25*G*coo_c**2 				
 
 		return beta.real,beta.imag
 
@@ -79,8 +82,8 @@ class sersic(am.FittableModel):
 	inputs = ('x','y','psf',)
 	outputs = ('img',)
 
-	logI  = am.Parameter(default=1.,max=4.)
-	alpha = am.Parameter(default=5.,min=0.1)
+	logI  = am.Parameter(default=1.)
+	alpha = am.Parameter(default=5.)
 	index = am.Parameter(default=0.5,min=0.01,max=20.)
 	E1 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
 	E2 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
@@ -246,29 +249,6 @@ def leastsquare(measured_vals, model, weights, x, y=None, p=None):
         return np.sum((weights * (model_vals - measured_vals)) ** 2)
 
 
-def AIM_lnprior(pars,model):
-	"""
-		log of the probability 
-	"""
-	for pn in model.param_names:
-		min = getattr(model,pn).min
-		max = getattr(model,pn).max
-		val = getattr(model,pn).value
-		
-		if min is not None:
-			if val < min:
-				return -np.inf
-		if max is not None:
-			if val > max:
-				return -np.inf
-	if hasattr(model,'E1_2') and hasattr(model,'E1_2'):
-		# IF THE ELLIPTICITY OF THE MODEL PROFILE IS IN
-		# THE SHEAR-DEGENERATE PARAMETRIZATION, WE CHECK
-		# THE ELLIPTICITY MAGNITUDE FOR COMPLIANCE
-		if (model.E1_2**2 + model.E2_2**2) >= E_LIMIT:
-			return -np.inf
-	return 0.
-
 def AIM_lnprob(pars, model, x, y, psf, data, weights):
 	"""
 		Log of the probability distribution, using the leastsquare 
@@ -279,14 +259,31 @@ def AIM_lnprob(pars, model, x, y, psf, data, weights):
 		lens model distortion passed to a source plane profile, and if
 		that profile has E1 and E2 parameters (degenerate with shear)
 		then we restrict those parameters to be less than the global 
-		E_LIMIT
+		E_LIMIT. 
 	"""
-	model.parameters = pars
-	lp = AIM_lnprior(pars,model)
-	print lp,pars
+	
+	maxima= [getattr(model,pn).max for pn in model.param_names]
+	minima= [getattr(model,pn).min for pn in model.param_names]
+
+	lp = 0.
+	for p, upper, lower in zip(pars,maxima,minima):
+		if lower is not None:
+			if p < lower:
+				lp = lp + (-np.inf)
+		if upper is not None:
+			if p > upper:
+				lp = lp + (-np.inf)
+	if hasattr(model,'E1_2') and hasattr(model,'E1_2'):
+		# IF THE ELLIPTICITY OF THE MODEL PROFILE IS IN
+		# THE SHEAR-DEGENERATE PARAMETRIZATION, WE CHECK
+		# THE ELLIPTICITY MAGNITUDE FOR COMPLIANCE
+		if (model.E1_2**2 + model.E2_2**2) >= E_LIMIT:
+			lp = lp + (-np.inf)
+	
 	if not np.isfinite(lp):
 		return -np.inf
 	
+	model.parameters = np.copy(pars)
 	return -leastsquare(data, model, weights, x, y, psf)
 
 def fit_image(model,data,weights,psf,verbose=False):
@@ -313,25 +310,21 @@ def fit_image(model,data,weights,psf,verbose=False):
 					 np.linspace(-axes[1],axes[1],2*axes[1]+1))
 		
 	p0 = np.repeat(model.parameters,N_WALKERS).reshape((model.parameters.size,N_WALKERS)).transpose()
+# 	p0 = p0 + P0_SCALE * (2*np.random.random(p0.shape)-1.)
+	range= np.array([getattr(model,pn).max for pn in model.param_names]) - \
+		   np.array([getattr(model,pn).min for pn in model.param_names])
+		   
+	p0 = p0 + P0_SCALE*np.ones((N_WALKERS,1))*range.transpose()*(np.random.random(p0.shape)-0.5)
+
 	sampler = emcee.EnsembleSampler(N_WALKERS, model.parameters.size, 
 									AIM_lnprob, 
 									args=[model, x, y, psf, data, weights])
-	
-	# Do the burn in
-	pos, prob, state = sampler.run_mcmc(p0, N_BURN)
-	sampler.reset()
-	
-	# Now the main run
-	sampler.run_mcmc(pos, N_CHAIN)
 
+	# Now the run
+	pos, prob, state = sampler.run_mcmc(p0, N_BURN+N_CHAIN)
 	if verbose:
-		print("Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
-		import matplotlib.pyplot as pl
-		for i,pn in enumerate(model.param_names):
-			pl.ion()
-			pl.figure()
-			pl.hist(sampler.flatchain[:,i], 100, color="k", histtype="step")
-			pl.title("Dimension {}".format(pn))
-			pl.ioff()
+		print("Mean acceptance fraction : {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
+		print("Acceptance fraction sigma: {0:.3f}".format(np.std(sampler.acceptance_fraction)))
 	
-	return sampler.chain
+	samples = sampler.chain[:, N_BURN:, :].reshape((-1, model.parameters.size))
+	return samples

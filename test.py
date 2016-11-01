@@ -1,6 +1,10 @@
 import aimflex
 import numpy as np
+import corner
+
 from matplotlib import pyplot
+from matplotlib.ticker import MaxNLocator
+
 # from astropy.io import fits
 # from astropy.modeling import fitting
 # from astropy.io import ascii
@@ -15,7 +19,7 @@ m = aimflex.get_AIM()
 
 m.logI = 2.
 m.g1_0 = -1./7
-m.F1_0 = -0.001
+m.F1_0 = -0.005
 m.G1_0 = -0.001
 
 dims = (51,51)
@@ -24,13 +28,30 @@ x,y =np.meshgrid(np.linspace(-(dims[0]-1)/2,(dims[0]-1)/2,dims[0]),
 p = np.zeros((3,3))
 p[1,1]=1
 
-data = m(x,y,p) + (2*np.random.random(dims) - 1.)
-weights = np.ones(dims)
+true_params = np.copy(m.parameters)
 
-pyplot.imshow(data)
-pyplot.show()
+data = aimflex.window_image(m(x,y,p) + (2*np.random.random(dims) - 1.))
+weights = aimflex.window_image(np.ones(dims))
 
-chain = aimflex.fit_image(m,data,weights,p,verbose=True)
+
+aimflex.set_gaussian_pars(data,m,weights=weights)
+aimflex.set_limits(data,m)
+
+samples = aimflex.fit_image(m,data,weights,p,verbose=True)
+
+fig = corner.corner(samples, labels=m.param_names,
+					truths=true_params)
+fig.savefig("aim-triangle.png")
+
+
+pyplot.clf()
+fig, axes = pyplot.subplots(m.parameters.size, 1, sharex=True, figsize=(8, 20))
 
 for i in range(m.parameters.size):
-	print i, len(set(chain[:,:,i].flatten()))
+	axes[i].plot(samples[:, i].T, color="k", alpha=0.4)
+	axes[i].yaxis.set_major_locator(MaxNLocator(5))
+	axes[i].axhline(true_params[i], color="b", lw=2)
+	axes[i].set_ylabel(m.param_names[i])
+
+fig.tight_layout(h_pad=0.0)
+fig.savefig("aim-time.png")
