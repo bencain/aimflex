@@ -125,13 +125,3 @@ def fit_dataset(image, weights, catalog, outfile, rscale=2.,psf=None,
 
 
 
-def cut_stamp(image,x,y,radius,window=True):
-	"""
-		Cut a square stamp image 2*radius+1 on a side centered on x,y from a larger
-		data image.  The returned image is windowed by default.
-	"""
-	out = image[(y-radius):(y+radius+1),(x-radius):(x+radius+1)]
-	if window:
-		return window_image(out)
-	else:
-		return out

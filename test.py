@@ -30,6 +30,7 @@ p[1,1]=1
 
 true_params = np.copy(m.parameters)
 
+true_img = aimflex.window_image(m(x,y,p))
 data = aimflex.window_image(m(x,y,p) + (2*np.random.random(dims) - 1.))
 weights = aimflex.window_image(np.ones(dims))
 
@@ -39,10 +40,22 @@ aimflex.set_limits(data,m)
 
 samples = aimflex.fit_image(m,data,weights,p,verbose=True)
 
+m.parameters = samples[-1,:]
+
+last = aimflex.window_image(m(x,y,p))
+
 fig = corner.corner(samples, labels=m.param_names,
 					truths=true_params)
 fig.savefig("aim-triangle.png")
 
+
+f, axarr = pyplot.subplots(2,2)
+axarr[0,0].imshow(data)
+axarr[0,1].imshow(true_img)
+axarr[1,0].imshow(last)
+axarr[1,1].imshow(data-last)
+
+f.savefig('4img.png')
 
 pyplot.clf()
 fig, axes = pyplot.subplots(m.parameters.size, 1, sharex=True, figsize=(8, 20))

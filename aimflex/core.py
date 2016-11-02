@@ -9,7 +9,7 @@ from astropy.modeling.fitting import Simplex
 from .utilities import *
 
 ################# CONSTANTS #########################
-N_WALKERS = 250		# emcee walkers
+N_WALKERS = 300		# emcee walkers
 N_BURN = 0			# emcee burn in steps
 N_CHAIN = 500		# emcee MCMC steps per walker
 
@@ -308,13 +308,19 @@ def fit_image(model,data,weights,psf,verbose=False):
 	axes = [(s-1)/2. for s in data.shape[::-1]]
 	x,y =np.meshgrid(np.linspace(-axes[0],axes[0],2*axes[0]+1),
 					 np.linspace(-axes[1],axes[1],2*axes[1]+1))
-		
+	
+	# scatter around gaussian guess	
 	p0 = np.repeat(model.parameters,N_WALKERS).reshape((model.parameters.size,N_WALKERS)).transpose()
-# 	p0 = p0 + P0_SCALE * (2*np.random.random(p0.shape)-1.)
 	range= np.array([getattr(model,pn).max for pn in model.param_names]) - \
-		   np.array([getattr(model,pn).min for pn in model.param_names])
-		   
+		   np.array([getattr(model,pn).min for pn in model.param_names])		   
 	p0 = p0 + P0_SCALE*np.ones((N_WALKERS,1))*range.transpose()*(np.random.random(p0.shape)-0.5)
+	
+	# spread across the allowed space
+# 	p0 = np.empty((N_WALKERS,model.parameters.size))
+# 	for i,pn in enumerate(model.param_names):
+# 		p0[:,i] = np.random.uniform(getattr(model,pn).min,
+# 									getattr(model,pn).max,
+# 									N_WALKERS)
 
 	sampler = emcee.EnsembleSampler(N_WALKERS, model.parameters.size, 
 									AIM_lnprob, 
