@@ -69,7 +69,6 @@ def lnprob(theta, x, y, yerr):
         return -np.inf
     
     val = lp + lnlike(theta, x, y, yerr)
-    print(val)
     return val
 
 # Find the maximum likelihood value.
@@ -124,26 +123,27 @@ samples = sampler.chain[:, burnin:, :].reshape((-1, ndim))
 fig = corner.corner(samples, labels=["$m$", "$b$", "$\ln\,f$"],
                       truths=[m_true, b_true, np.log(f_true)])
 fig.savefig("line-triangle.png")
-
-# Plot some samples onto the data.
-pl.figure()
-for m, b, lnf in samples[np.random.randint(len(samples), size=100)]:
-    pl.plot(xl, m*xl+b, color="k", alpha=0.1)
-pl.plot(xl, m_true*xl+b_true, color="r", lw=2, alpha=0.8)
-pl.errorbar(x, y, yerr=yerr, fmt=".k")
-pl.ylim(-9, 9)
-pl.xlabel("$x$")
-pl.ylabel("$y$")
-pl.tight_layout()
-pl.savefig("line-mcmc.png")
-
-# Compute the quantiles.
-samples[:, 2] = np.exp(samples[:, 2])
-m_mcmc, b_mcmc, f_mcmc = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]),
-                             zip(*np.percentile(samples, [16, 50, 84],
-                                                axis=0)))
-print("""MCMC result:
-    m = {0[0]} +{0[1]} -{0[2]} (truth: {1})
-    b = {2[0]} +{2[1]} -{2[2]} (truth: {3})
-    f = {4[0]} +{4[1]} -{4[2]} (truth: {5})
-""".format(m_mcmc, m_true, b_mcmc, b_true, f_mcmc, f_true))
+# fig.close()
+# 
+# # Plot some samples onto the data.
+# pl.figure()
+# for m, b, lnf in samples[np.random.randint(len(samples), size=100)]:
+#     pl.plot(xl, m*xl+b, color="k", alpha=0.1)
+# pl.plot(xl, m_true*xl+b_true, color="r", lw=2, alpha=0.8)
+# pl.errorbar(x, y, yerr=yerr, fmt=".k")
+# pl.ylim(-9, 9)
+# pl.xlabel("$x$")
+# pl.ylabel("$y$")
+# pl.tight_layout()
+# pl.savefig("line-mcmc.png")
+# 
+# # Compute the quantiles.
+# samples[:, 2] = np.exp(samples[:, 2])
+# m_mcmc, b_mcmc, f_mcmc = map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]),
+#                              zip(*np.percentile(samples, [16, 50, 84],
+#                                                 axis=0)))
+# print("""MCMC result:
+#     m = {0[0]} +{0[1]} -{0[2]} (truth: {1})
+#     b = {2[0]} +{2[1]} -{2[2]} (truth: {3})
+#     f = {4[0]} +{4[1]} -{4[2]} (truth: {5})
+# """.format(m_mcmc, m_true, b_mcmc, b_true, f_mcmc, f_true))

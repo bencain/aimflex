@@ -17,6 +17,9 @@ P0_SCALE = 5e-3		# Size of random offsets to the
 					# initial parameter guess.
 
 E_LIMIT = 0.9		# Ellipticity magnitude limit
+g_LIMIT = 5.0		# Reduced shear magnitude limit
+F_LIMIT = 0.1		# 1-flexion magnitude limit
+G_LIMIT = 0.1		# 3-flexion magnitude limit
 ################# CLASSES ###########################
 
 class lens_equation(am.FittableModel):
@@ -40,12 +43,12 @@ class lens_equation(am.FittableModel):
 	
 	c1 = 	am.Parameter(default=0.)
 	c2 = 	am.Parameter(default=0.)
-	g1 = 	am.Parameter(default=0.,max=5.,min=-5.)
-	g2 = 	am.Parameter(default=0.,max=5.,min=-5.)
-	F1 = 	am.Parameter(default=0.)
-	F2 = 	am.Parameter(default=0.)
-	G1 = 	am.Parameter(default=0.)
-	G2 = 	am.Parameter(default=0.)
+	g1 = 	am.Parameter(default=0.,max=g_LIMIT,min=-g_LIMIT)
+	g2 = 	am.Parameter(default=0.,max=g_LIMIT,min=-g_LIMIT)
+	F1 = 	am.Parameter(default=0.,max=F_LIMIT,min=-F_LIMIT)
+	F2 = 	am.Parameter(default=0.,max=F_LIMIT,min=-F_LIMIT)
+	G1 = 	am.Parameter(default=0.,max=G_LIMIT,min=-G_LIMIT)
+	G2 = 	am.Parameter(default=0.,max=G_LIMIT,min=-G_LIMIT)
 	
 # 	standard_broadcasting = False
 		
@@ -273,6 +276,20 @@ def AIM_lnprob(pars, model, x, y, psf, data, weights):
 		if upper is not None:
 			if p > upper:
 				lp = lp + (-np.inf)
+
+	# Make sure the center of the lensing transformation is inside the windowed field.
+	if (model.c1_0**2 + model.c2_0**2) >= min(data.shape)**2:
+			lp = lp + (-np.inf)
+	
+	# Circularly limit the lensing fields
+	if (model.g1_0**2 + model.g2_0**2) >= g_LIMIT**2:
+			lp = lp + (-np.inf)
+	if (model.F1_0**2 + model.F2_0**2) >= F_LIMIT**2:
+			lp = lp + (-np.inf)
+	if (model.G1_0**2 + model.G2_0**2) >= G_LIMIT**2:
+			lp = lp + (-np.inf)
+	
+	
 	if hasattr(model,'E1_2') and hasattr(model,'E1_2'):
 		# IF THE ELLIPTICITY OF THE MODEL PROFILE IS IN
 		# THE SHEAR-DEGENERATE PARAMETRIZATION, WE CHECK

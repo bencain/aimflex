@@ -51,10 +51,10 @@ def set_limits(image,model):
 	"""
 	
 	dims = image.shape
-	model.c1_0.max =  0.5*dims[0]
-	model.c1_0.min = -0.5*dims[0]
-	model.c2_0.max =  0.5*dims[1]
-	model.c2_0.min = -0.5*dims[1]
+	model.c1_0.max =  dims[0]
+	model.c1_0.min = -dims[0]
+	model.c2_0.max =  dims[1]
+	model.c2_0.min = -dims[1]
 	
 	model.alpha_2.max = max(dims)
 	model.alpha_2.min = 1e-1
@@ -62,16 +62,6 @@ def set_limits(image,model):
 	model.logI_2.max = np.log10(np.amax(image)*np.product(dims))
 	model.logI_2.min = np.log10(np.amin(image[image>0]))
 	
-	model.F1_0.max =  1./max(dims)
-	model.F1_0.min = -1./max(dims)
-	model.F2_0.max =  1./max(dims)
-	model.F2_0.min = -1./max(dims)
-
-	model.G1_0.max =  1./max(dims)
-	model.G1_0.min = -1./max(dims)
-	model.G2_0.max =  1./max(dims)
-	model.G2_0.min = -1./max(dims)
-
 def window_image(image):
 	"""
 		This function windows an image such that all pixels outside the 
