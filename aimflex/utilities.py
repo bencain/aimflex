@@ -51,12 +51,12 @@ def set_limits(image,model):
 	"""
 	
 	dims = image.shape
-	model.c1_0.max =  dims[0]
-	model.c1_0.min = -dims[0]
-	model.c2_0.max =  dims[1]
-	model.c2_0.min = -dims[1]
+	model.c1_0.max =  dims[0]/2.
+	model.c1_0.min = -dims[0]/2.
+	model.c2_0.max =  dims[1]/2.
+	model.c2_0.min = -dims[1]/2.
 	
-	model.alpha_2.max = max(dims)
+	model.alpha_2.max = max(dims)/2.
 	model.alpha_2.min = 1e-1
 	
 	model.logI_2.max = np.log10(np.amax(image)*np.product(dims))
@@ -284,3 +284,28 @@ def cut_stamp(image,x,y,radius,window=True):
 		return window_image(out)
 	else:
 		return out
+
+
+def avg_err_corr(samples,confidence=[16,50,84]):
+	"""
+		Calculates the mean and standard deviation for each of the parameters
+		and the correlation matrix for the parameters.  Assumes a flattened 
+		emcee-style set of samples, of shape (NSAMPLE,NPAR).
+		
+		Output is a 4-tuple with the elements:
+			avg - 1D array of mean parameter values
+			std - 1D array of parameter standard deviation values
+			pct - NCONFxNPAR array of confidence level parameter values
+				  (default NCONF for ``1-sigma'' levels, plus median).
+			corr -2D correlation matrix for the parameter values
+			 
+	"""
+	avg = np.mean(samples,axis=0)
+	std = np.std(samples,axis=0,ddof=1)
+	corr = (np.cov(samples,rowvar=False)/np.outer(std,std))
+	
+	pct = np.percentile(samples, confidence, axis=0)
+	
+	return avg, std, pct, corr
+	
+	

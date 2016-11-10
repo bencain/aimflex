@@ -22,7 +22,8 @@ logI_rng = (1,2)	# uniform
 index_rng=(0.25,5)	# uniform in log
 noise_sig = 1.		# normal
 
-sample_size=100
+sample_size=2
+break_size =100
 
 dims = (101,101)
 x,y =np.meshgrid(np.linspace(-(dims[0]-1)/2,(dims[0]-1)/2,dims[0]),
@@ -37,21 +38,33 @@ index = np.power(10,np.random.uniform(np.log10(index_rng[0]),
 									  np.log10(index_rng[1]),
 									  sample_size))
 
-sample = np.sort(np.random.random_integers(0,len(field_data_raw)-1,
-											sample_size))
+sample = np.sort(np.random.randint(0,len(field_data_raw),sample_size))
 
 
-input_data = Table(names=model.param_names)
-output_data = Table(names=model.param_names)
-chisq = Table(names=['chisq'])
-samp_tbl = Table(names=['sample_point'],dtype=('i4',))
-obj_tbl = Table(names=['objnum'],dtype=('i4',))
+input_pars = Table(names=model.param_names)
+best_pars = Table(names=[pn+'_best'for pn in model.param_names])
+mean_pars = Table(names=[pn+'_mean'for pn in model.param_names])
+median_pars = Table(names=[pn+'_median'for pn in model.param_names])
+obj_tbl = Table(names=['objnum','sample_point'],dtype=('i4','i4',))
+
 upper_error = Table(names=[pn+'_err_up'for pn in model.param_names])
 lower_error = Table(names=[pn+'_err_lo'for pn in model.param_names])
+sigma_error = Table(names=[pn+'_stdev'for pn in model.param_names])
 
-# pl.ion()
+lsq = Table(names=['lsq_value'])
+
 for i,s in enumerate(sample):
 	print i,datetime.datetime.now()
+	if (i % break_size) == 0 and i>1:
+		input_data = hstack([obj_tbl,input_pars])
+		output_data = hstack([obj_tbl,
+							  best_pars,mean_pars,median_pars,
+							  sigma_error,upper_error,lower_error,
+							  lsq])
+
+		input_data.write(path.join(outdir,"input_data_{:03d}.txt".format(i-break_size)),format='ascii.fixed_width')
+		output_data.write(path.join(outdir,"output_data_{}.txt"),format='ascii.fixed_width')
+
 
 	model.c1_0 = 0.
 	model.c2_0 = 0.
@@ -80,32 +93,32 @@ for i,s in enumerate(sample):
 
 	### FITTING
 	###
-	samples = aimflex.fit_image(model,data,weights,p,verbose=False)
-# 	samples = np.random.randn(500,13)
+	samples, chisqs = aimflex.fit_image(model,data,weights,p,verbose=False)
+	samples2D=samples.reshape((-1, model.parameters.size))
 
-	cfig = corner.corner(samples, labels=model.param_names,
+	# corner figure
+	cfig = corner.corner(samples2D, labels=model.param_names,
 					truths=true_params)
 	cfig.savefig(path.join(outdir,"obj_{:03d}_corner.png".format(i)))
 	cfig.clf()
 	
+	# results to save
+	stats = aimflex.avg_err_corr(samples2D)
+	best = np.argmin(chisqs)
 	
-	# tuples of (median, dx+, dx-) for 68% confidence contours
-	conf = 0.68
-	mcmc_results = np.array(
-					map(lambda v: (v[1], v[2]-v[1], v[1]-v[0]),
-					zip(*np.percentile(samples, [50-conf*100/2, 
-												 50, 
-												 50+conf*100/2],axis=0)))
-					)
-
-	model.parameters = mcmc_results[:,0]
+	fit_pars = samples[best]
+	chisq = chisqs[best]
+	
+	model.parameters = fit_pars
+	
 	outimg = model(x,y,p)
 
+	# Image plots
 	f, axarr = pl.subplots(2,2)
-	axarr[0,0].imshow(data)
-	axarr[0,1].imshow(true)
-	axarr[1,0].imshow(outimg)
-	axarr[1,1].imshow(data-outimg)
+	axarr[0,0].imshow(data,cmap='bone')
+	axarr[0,1].imshow(true,cmap='bone')
+	axarr[1,0].imshow(outimg,cmap='bone')
+	axarr[1,1].imshow(data-outimg,cmap='bone')
 
 	axarr[0,0].set_title('Data')
 	axarr[0,1].set_title('Input')
@@ -115,6 +128,7 @@ for i,s in enumerate(sample):
 	f.savefig(path.join(outdir,"obj_{:03d}_images.png".format(i)))
 	f.clf()
 	
+	# Parameter track plots
 	fig, axes = pl.subplots(model.parameters.size, 1, sharex=True, figsize=(8, 20))
 
 	for k in range(model.parameters.size):
@@ -129,24 +143,33 @@ for i,s in enumerate(sample):
 	
 	del fig, cfig, f
 
-	input_data.add_row(true_params)
-	output_data.add_row(mcmc_results[:,0])
-	chisq.add_row([aimflex.leastsquare(data, model, weights, x, y, p)])
-	samp_tbl.add_row([s])
-	obj_tbl.add_row([i])
-	upper_error.add_row(mcmc_results[:,1])
-	lower_error.add_row(mcmc_results[:,1])
+	# Output
+	obj_tbl.add_row([i,s])
+	
+	input_pars.add_row(true_params)
+	best_pars.add_row(fit_pars)
+	mean_pars.add_row(stats[0])
+	sigma_error.add_row(stats[1])
+
+	median_pars.add_row(stats[2][1])
+	upper_error.add_row(stats[2][2] - stats[2][1])
+	lower_error.add_row(stats[2][2] - stats[2][1])
+
+	lsq.add_row(chisq)
+
+
+# 	input_data.add_row(true_params)
+# 	output_data.add_row(mcmc_results[:,0])
+# 	chisq.add_row([aimflex.leastsquare(data, model, weights, x, y, p)])
+# 	samp_tbl.add_row([s])
+# 	obj_tbl.add_row([i])
+# 	upper_error.add_row(mcmc_results[:,1])
+# 	lower_error.add_row(mcmc_results[:,1])
 	
 	pl.close("all")
 
+
+input_data.write(path.join(outdir,"input_data_master.txt"),format='ascii.fixed_width')
+output_data.write(path.join(outdir,"output_data_master.txt"),format='ascii.fixed_width')
 print 'Finished!!',datetime.datetime.now()
 
-# 	pl.imshow(data)
-# 	print model
-# 	raw_input("Next?")
-
-input_data = hstack([obj_tbl,input_data,samp_tbl])
-output_data = hstack([obj_tbl,output_data,chisq,upper_error,lower_error,samp_tbl])
-
-input_data.write(path.join(outdir,"input_data.txt"),format='ascii.fixed_width')
-output_data.write(path.join(outdir,"output_data.txt"),format='ascii.fixed_width')

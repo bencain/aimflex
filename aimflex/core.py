@@ -16,10 +16,10 @@ N_CHAIN = 500		# emcee MCMC steps per walker
 P0_SCALE = 5e-3		# Size of random offsets to the
 					# initial parameter guess.
 
-E_LIMIT = 0.9		# Ellipticity magnitude limit
+E_LIMIT = 1.0		# Ellipticity magnitude limit
 g_LIMIT = 5.0		# Reduced shear magnitude limit
-F_LIMIT = 0.1		# 1-flexion magnitude limit
-G_LIMIT = 0.1		# 3-flexion magnitude limit
+F_LIMIT = 0.5		# 1-flexion magnitude limit
+G_LIMIT = 0.5		# 3-flexion magnitude limit
 ################# CLASSES ###########################
 
 class lens_equation(am.FittableModel):
@@ -252,6 +252,54 @@ def leastsquare(measured_vals, model, weights, x, y=None, p=None):
         return np.sum((weights * (model_vals - measured_vals)) ** 2)
 
 
+def AIM_prior_ok(pars, model, data):
+	"""
+		AIM model parameter prior - flat with limits.
+	"""
+	
+	model.parameters = pars
+	
+	maxima= [getattr(model,pn).max for pn in model.param_names]
+	minima= [getattr(model,pn).min for pn in model.param_names]
+
+	lp = 0.
+	for p, upper, lower in zip(pars,maxima,minima):
+		if lower is not None:
+			if p < lower:
+# 				print pn,"too low"
+				lp = lp + (-np.inf)
+		if upper is not None:
+			if p > upper:
+# 				print pn,"too high"
+				lp = lp + (-np.inf)
+
+	# Make sure the center of the lensing transformation is inside the windowed field.
+	if (model.c1_0**2 + model.c2_0**2) >= min(data.shape)**2:
+# 		print "bad ctr"
+		lp = lp + (-np.inf)
+	
+	# Circularly limit the lensing fields
+	if (model.g1_0**2 + model.g2_0**2) >= g_LIMIT**2:
+# 		print "bad g"
+		lp = lp + (-np.inf)
+	if (model.F1_0**2 + model.F2_0**2) >= F_LIMIT**2:
+# 		print "bad F"
+		lp = lp + (-np.inf)
+	if (model.G1_0**2 + model.G2_0**2) >= G_LIMIT**2:
+# 		print "bad G",model.G1_0,model.G2_0
+		lp = lp + (-np.inf)
+	
+	if hasattr(model,'E1_2') and hasattr(model,'E2_2'):
+		# IF THE ELLIPTICITY OF THE MODEL PROFILE IS IN
+		# THE SHEAR-DEGENERATE PARAMETRIZATION, WE CHECK
+		# THE ELLIPTICITY MAGNITUDE FOR COMPLIANCE
+		if (model.E1_2**2 + model.E2_2**2) >= E_LIMIT:
+# 			print "bad E",model.E1_2**2 + model.E2_2**2
+			lp = lp + (-np.inf)
+	
+	return lp
+
+
 def AIM_lnprob(pars, model, x, y, psf, data, weights):
 	"""
 		Log of the probability distribution, using the leastsquare 
@@ -265,45 +313,16 @@ def AIM_lnprob(pars, model, x, y, psf, data, weights):
 		E_LIMIT. 
 	"""
 	
-	maxima= [getattr(model,pn).max for pn in model.param_names]
-	minima= [getattr(model,pn).min for pn in model.param_names]
-
-	lp = 0.
-	for p, upper, lower in zip(pars,maxima,minima):
-		if lower is not None:
-			if p < lower:
-				lp = lp + (-np.inf)
-		if upper is not None:
-			if p > upper:
-				lp = lp + (-np.inf)
-
-	# Make sure the center of the lensing transformation is inside the windowed field.
-	if (model.c1_0**2 + model.c2_0**2) >= min(data.shape)**2:
-			lp = lp + (-np.inf)
+	lp = AIM_prior_ok(pars, model, data)
 	
-	# Circularly limit the lensing fields
-	if (model.g1_0**2 + model.g2_0**2) >= g_LIMIT**2:
-			lp = lp + (-np.inf)
-	if (model.F1_0**2 + model.F2_0**2) >= F_LIMIT**2:
-			lp = lp + (-np.inf)
-	if (model.G1_0**2 + model.G2_0**2) >= G_LIMIT**2:
-			lp = lp + (-np.inf)
-	
-	
-	if hasattr(model,'E1_2') and hasattr(model,'E1_2'):
-		# IF THE ELLIPTICITY OF THE MODEL PROFILE IS IN
-		# THE SHEAR-DEGENERATE PARAMETRIZATION, WE CHECK
-		# THE ELLIPTICITY MAGNITUDE FOR COMPLIANCE
-		if (model.E1_2**2 + model.E2_2**2) >= E_LIMIT:
-			lp = lp + (-np.inf)
-	
-	if not np.isfinite(lp):
+	if np.isfinite(lp):
+		model.parameters = np.copy(pars)
+		return -leastsquare(data, model, weights, x, y, psf)
+	else:
 		return -np.inf
 	
-	model.parameters = np.copy(pars)
-	return -leastsquare(data, model, weights, x, y, psf)
-
-def fit_image(model,data,weights,psf,verbose=False):
+def fit_image(model,data,weights,psf,verbose=False,
+			  nwalkers=N_WALKERS,nburn=N_BURN,nchain=N_CHAIN):
 	"""
 		Use emcee to find the best parameter fit plus errors. Takes as
 		input:
@@ -327,27 +346,51 @@ def fit_image(model,data,weights,psf,verbose=False):
 					 np.linspace(-axes[1],axes[1],2*axes[1]+1))
 	
 	# scatter around gaussian guess	
-	p0 = np.repeat(model.parameters,N_WALKERS).reshape((model.parameters.size,N_WALKERS)).transpose()
-	range= np.array([getattr(model,pn).max for pn in model.param_names]) - \
-		   np.array([getattr(model,pn).min for pn in model.param_names])		   
-	p0 = p0 + P0_SCALE*np.ones((N_WALKERS,1))*range.transpose()*(np.random.random(p0.shape)-0.5)
+# 	p0 = np.repeat(model.parameters,N_WALKERS).reshape((model.parameters.size,N_WALKERS)).transpose()
+# 	range= np.array([getattr(model,pn).max for pn in model.param_names]) - \
+# 		   np.array([getattr(model,pn).min for pn in model.param_names])		   
+# 	p0 = p0 + P0_SCALE*np.ones((N_WALKERS,1))*range.transpose()*(np.random.random(p0.shape)-0.5)
 	
 	# spread across the allowed space
-# 	p0 = np.empty((N_WALKERS,model.parameters.size))
+# 	p0 = np.empty((nwalkers,model.parameters.size))
 # 	for i,pn in enumerate(model.param_names):
 # 		p0[:,i] = np.random.uniform(getattr(model,pn).min,
 # 									getattr(model,pn).max,
-# 									N_WALKERS)
+# 									nwalkers)
 
-	sampler = emcee.EnsembleSampler(N_WALKERS, model.parameters.size, 
+
+	p0 = start_pars(model,data,nwalkers=nwalkers)
+
+	sampler = emcee.EnsembleSampler(nwalkers, model.parameters.size, 
 									AIM_lnprob, 
 									args=[model, x, y, psf, data, weights])
 
 	# Now the run
-	pos, prob, state = sampler.run_mcmc(p0, N_BURN+N_CHAIN)
+	pos, prob, state = sampler.run_mcmc(p0, nburn+nchain)
 	if verbose:
 		print("Mean acceptance fraction : {0:.3f}".format(np.mean(sampler.acceptance_fraction)))
 		print("Acceptance fraction sigma: {0:.3f}".format(np.std(sampler.acceptance_fraction)))
 	
-	samples = sampler.chain[:, N_BURN:, :].reshape((-1, model.parameters.size))
-	return samples
+	samples = sampler.chain[:, nburn:, :]
+	chisqs = -sampler.lnprobability[:,nburn:]
+	return samples, chisqs
+
+
+def start_pars(model,data,nwalkers=N_WALKERS):
+	"""
+		Given the model (and an optional walker number) set initial parameter
+		values to span the parameter space and taking into account the priors.
+	"""
+	
+	p0 = []
+	
+	while len(p0) < nwalkers:
+		p=np.empty(len(model.param_names))
+		for i,pn in enumerate(model.param_names):
+			p[i] = np.random.uniform(getattr(model,pn).min,
+									 getattr(model,pn).max)
+
+		if np.isfinite(AIM_prior_ok(p,model,data)):
+			p0.append(p)
+	
+	return np.array(p0)
