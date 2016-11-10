@@ -104,7 +104,7 @@ for i,s in enumerate(sample):
 	
 	# results to save
 	stats = aimflex.avg_err_corr(samples2D)
-	best = np.argmin(chisqs)
+	best = np.unravel_index(np.argmin(chisqs),chisqs.shape)
 	
 	fit_pars = samples[best]
 	chisq = chisqs[best]
@@ -155,7 +155,7 @@ for i,s in enumerate(sample):
 	upper_error.add_row(stats[2][2] - stats[2][1])
 	lower_error.add_row(stats[2][2] - stats[2][1])
 
-	lsq.add_row(chisq)
+	lsq.add_row([chisq])
 
 
 # 	input_data.add_row(true_params)
@@ -168,6 +168,11 @@ for i,s in enumerate(sample):
 	
 	pl.close("all")
 
+input_data = hstack([obj_tbl,input_pars])
+output_data = hstack([obj_tbl,
+					  best_pars,mean_pars,median_pars,
+					  sigma_error,upper_error,lower_error,
+					  lsq])
 
 input_data.write(path.join(outdir,"input_data_master.txt"),format='ascii.fixed_width')
 output_data.write(path.join(outdir,"output_data_master.txt"),format='ascii.fixed_width')
