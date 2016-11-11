@@ -9,7 +9,7 @@ from astropy.modeling.fitting import Simplex
 from .utilities import *
 
 ################# CONSTANTS #########################
-N_WALKERS = 300		# emcee walkers
+N_WALKERS = 500		# emcee walkers
 N_BURN = 0			# emcee burn in steps
 N_CHAIN = 500		# emcee MCMC steps per walker
 

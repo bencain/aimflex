@@ -18,7 +18,7 @@ else:
 field_data_raw = Table.read('true_fields.txt',format='ascii.fixed_width')
 e_sigma = 0.2		# normal
 alpha_rng = (2,15)	# uniform
-logI_rng = (0,2)	# uniform
+logI_rng = (0.5,2)	# uniform
 index_rng=(0.2,5)	# uniform in log
 noise_sig = 1.		# normal
 
