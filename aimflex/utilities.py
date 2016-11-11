@@ -25,8 +25,9 @@ def set_gaussian_pars(image,model,weights=1.):
 	logI=np.log10(np.amax(mod_image))
 	
 	# Set the parameters for a gaussian
-	model.c1_0=ctr[0]
-	model.c2_0=ctr[1]
+	if hasattr(model,'c1_0') and hasattr(model,'c2_0'):
+		model.c1_0=ctr[0]
+		model.c2_0=ctr[1]
 
 	model.logI_2 = logI
 	model.alpha_2=epars[0]
@@ -43,7 +44,7 @@ def set_gaussian_pars(image,model,weights=1.):
 	model.G2_0 = 0.
 	
 	
-def set_limits(image,model):
+def set_limits(image,model,verbose=False):
 	"""
 		This function uses the image dimensions to set the maximum and minimum
 		parameter values for the centroid and scale factor AIM model parameters,
@@ -51,16 +52,22 @@ def set_limits(image,model):
 	"""
 	
 	dims = image.shape
-	model.c1_0.max =  dims[0]/2.
-	model.c1_0.min = -dims[0]/2.
-	model.c2_0.max =  dims[1]/2.
-	model.c2_0.min = -dims[1]/2.
+	if hasattr(model,'c1_0') and hasattr(model,'c2_0'):
+		model.c1_0.max =  dims[0]
+		model.c1_0.min = -dims[0]
+		model.c2_0.max =  dims[1]
+		model.c2_0.min = -dims[1]
 	
-	model.alpha_2.max = max(dims)/2.
+	model.alpha_2.max = max(dims)/3.
 	model.alpha_2.min = 1e-1
 	
-	model.logI_2.max = np.log10(np.amax(image)*np.product(dims))
-	model.logI_2.min = np.log10(np.amin(image[image>0]))
+# 	model.logI_2.max = np.log10(2*np.pi*np.amax(image)*np.product(dims))
+# 	model.logI_2.min = np.log10(np.amin(image[image>0]))
+	
+	if verbose:
+		print 'Parameter,max,min'
+		for pn in model.param_names:
+			print pn,getattr(model,pn).max,getattr(model,pn).min
 	
 def window_image(image):
 	"""
@@ -286,7 +293,7 @@ def cut_stamp(image,x,y,radius,window=True):
 		return out
 
 
-def avg_err_corr(samples,confidence=[16,50,84]):
+def sample_stats(samples,confidence=[16,50,84],modebin=None):
 	"""
 		Calculates the mean and standard deviation for each of the parameters
 		and the correlation matrix for the parameters.  Assumes a flattened 
@@ -297,15 +304,25 @@ def avg_err_corr(samples,confidence=[16,50,84]):
 			std - 1D array of parameter standard deviation values
 			pct - NCONFxNPAR array of confidence level parameter values
 				  (default NCONF for ``1-sigma'' levels, plus median).
+			mode - 1D array of mode parameter value estimates
 			corr -2D correlation matrix for the parameter values
 			 
 	"""
 	avg = np.mean(samples,axis=0)
 	std = np.std(samples,axis=0,ddof=1)
 	corr = (np.cov(samples,rowvar=False)/np.outer(std,std))
-	
 	pct = np.percentile(samples, confidence, axis=0)
 	
-	return avg, std, pct, corr
+	# Estimate the mode
+	if modebin is None:
+		modebin = samples.shape[0]//100
+	sd = np.sort(samples,axis=0)
+	centers = (sd[modebin::modebin] + sd[::modebin,:][:-1,:])/2.
+	density = 1./(sd[modebin::modebin,:] - sd[::modebin,:][:-1,:])
+	
+	mode = centers[np.argmax(density,axis=0),np.arange(samples.shape[1])]
+	
+	
+	return avg, std, pct, mode, corr
 	
 	

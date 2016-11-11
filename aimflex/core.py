@@ -13,9 +13,10 @@ N_WALKERS = 300		# emcee walkers
 N_BURN = 0			# emcee burn in steps
 N_CHAIN = 500		# emcee MCMC steps per walker
 
-P0_SCALE = 5e-3		# Size of random offsets to the
-					# initial parameter guess.
+# P0_SCALE = 5e-3		# Size of random offsets to the
+# 					# initial parameter guess.
 
+LOGI_LIMIT = 5.		# 
 E_LIMIT = 1.0		# Ellipticity magnitude limit
 g_LIMIT = 5.0		# Reduced shear magnitude limit
 F_LIMIT = 0.5		# 1-flexion magnitude limit
@@ -71,6 +72,51 @@ class lens_equation(am.FittableModel):
 		return beta.real,beta.imag
 
 
+class lens_equation_fixed(am.FittableModel):
+	"""
+		This class implements a quadratic local lens distortion with
+		reduced shear, and flexion as inputs.  Parameters are
+			g1		- + polarized reduced shear
+			g2		- x polarized reduced shear
+			F1		- reduced 1-Flexion x
+			F2		- reduced 1-Flexion y
+			G1		- reduced 3-Flexion x
+			G2		- reduced 3-Flexion y
+		We assume a complex image plane position array as input, and
+		return the same for the source plane as output.  Flexion units
+		are assumed to be inverse of the image/source plane units.
+		
+		This differes from the unfixed version because it does not allow
+		the center of the lens distortion to move.
+	"""
+	inputs = ('theta1','theta2',)
+	outputs = ('beta1','beta2',)
+	
+	g1 = 	am.Parameter(default=0.,max=g_LIMIT,min=-g_LIMIT)
+	g2 = 	am.Parameter(default=0.,max=g_LIMIT,min=-g_LIMIT)
+	F1 = 	am.Parameter(default=0.,max=F_LIMIT,min=-F_LIMIT)
+	F2 = 	am.Parameter(default=0.,max=F_LIMIT,min=-F_LIMIT)
+	G1 = 	am.Parameter(default=0.,max=G_LIMIT,min=-G_LIMIT)
+	G2 = 	am.Parameter(default=0.,max=G_LIMIT,min=-G_LIMIT)
+	
+# 	standard_broadcasting = False
+		
+	@staticmethod
+	def evaluate(theta1,theta2, g1,g2, F1,F2,G1,G2):	
+		
+		coo=theta1+1j*theta2
+		
+		g=g1+1j*g2
+		F=F1+1j*F2
+		G=G1+1j*G2
+		
+		coo_c = np.conj(coo)
+		
+		beta = coo - g*coo_c - 0.25*np.conj(F)*coo**2 \
+				- 0.5*F*coo*coo_c - 0.25*G*coo_c**2 				
+
+		return beta.real,beta.imag
+
 class sersic(am.FittableModel):
 	"""
 		This class implements an elliptical Sersic source plane model profile.
@@ -85,9 +131,9 @@ class sersic(am.FittableModel):
 	inputs = ('x','y','psf',)
 	outputs = ('img',)
 
-	logI  = am.Parameter(default=1.)
+	logI  = am.Parameter(default=1.,min=-LOGI_LIMIT,max=LOGI_LIMIT)
 	alpha = am.Parameter(default=5.)
-	index = am.Parameter(default=0.5,min=0.01,max=20.)
+	index = am.Parameter(default=0.5,min=0.01,max=10.)
 	E1 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
 	E2 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
 	
@@ -97,17 +143,13 @@ class sersic(am.FittableModel):
 	def evaluate(x,y,psf,
 				 logI,alpha,index,E1,E2):	
 				
-		# Need to get Gaussian2D parameters from my parameters
-		if logI > logI.max:
-			logI= logI.max
-		
-		amp = np.power(10.,logI)	# Gaussian amplitude
+		amp = np.power(10.,logI)	# Peak amplitude
 		
 		# Ensure ellipticities don't get out of whack
 		emag=np.sqrt(E1**2+E2**2)
 		if emag > 1:
-			E1/=emag
-			E2/=emag
+			E1/=(emag+1e-3)
+			E2/=(emag+1e-3)
 		
 		# Ellipse parameters
 		ellipse = convert_epars([alpha,E1,E2],pol_to_ae=True)
@@ -207,13 +249,16 @@ class AIMSimplexLSQFitter(am.fitting.SimplexLSQFitter):
 
 ################# METHODS ###########################
 
-def get_AIM():
+def get_AIM(fixed=False):
 	"""
 		Return a lensed Sersic model object.
 	"""
 	
 	profile=sersic
-	distortion=lens_equation
+	if fixed:
+		distortion=lens_equation_fixed
+	else:
+		distortion=lens_equation
 	return (distortion() & Identity(1)) | profile()
 
 
@@ -274,9 +319,10 @@ def AIM_prior_ok(pars, model, data):
 				lp = lp + (-np.inf)
 
 	# Make sure the center of the lensing transformation is inside the windowed field.
-	if (model.c1_0**2 + model.c2_0**2) >= min(data.shape)**2:
-# 		print "bad ctr"
-		lp = lp + (-np.inf)
+	if hasattr(model,'c1_0') and hasattr(model,'c2_0'):
+		if (model.c1_0**2 + model.c2_0**2) >= min(data.shape)**2:
+# 			print "bad ctr"
+			lp = lp + (-np.inf)
 	
 	# Circularly limit the lensing fields
 	if (model.g1_0**2 + model.g2_0**2) >= g_LIMIT**2:
