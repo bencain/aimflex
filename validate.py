@@ -19,7 +19,7 @@ field_data_raw = Table.read('true_fields.txt',format='ascii.fixed_width')
 e_sigma = 0.2		# normal
 alpha_rng = (2,15)	# uniform
 logI_rng = (0.5,2)	# uniform
-index_rng=(0.2,5)	# uniform in log
+index_rng=(0.2,5)	# uniform
 noise_sig = 1.		# normal
 
 sample_size=500
@@ -29,12 +29,12 @@ dims = (75,75)
 x,y =np.meshgrid(np.linspace(-(dims[0]-1)/2,(dims[0]-1)/2,dims[0]),
                  np.linspace(-(dims[1]-1)/2,(dims[1]-1)/2,dims[1]))
 p=None
-model = aimflex.get_AIM(fixed=True)
+model = aimflex.get_AIM(flipped=True)
 
 E = np.random.randn(sample_size,2)*e_sigma
 A = np.random.uniform(*alpha_rng,size=sample_size)
 logI = np.random.uniform(*logI_rng,size=sample_size)
-index = np.power(10,np.random.uniform(np.log10(index_rng[0]),np.log10(index_rng[1]),sample_size))
+index = np.random.uniform(*index_rng,size=sample_size)
 
 sample = np.sort(np.random.randint(0,len(field_data_raw),sample_size))
 
@@ -70,14 +70,15 @@ for i,s in enumerate(sample):
 						format='ascii.fixed_width')
 
 
-# 	model.c1_0 = 0.
-# 	model.c2_0 = 0.
+	model.c1_0 = 0.
+	model.c2_0 = 0.
 
 	model.E1_2 = E[i,0]
 	model.E2_2 = E[i,1]
 	model.alpha_2 = A[i]
 	model.logI_2 = logI[i]
-	model.index_2 = index[i]
+# 	model.index_2 = index[i]
+	model.invindex_2 = index[i]
 	
 	model.g1_0 = field_data_raw['g1'][s]
 	model.g2_0 = field_data_raw['g2'][s]
@@ -101,7 +102,7 @@ for i,s in enumerate(sample):
 	samples2D=samples.reshape((-1, model.parameters.size))
 
 	# corner figure
-	cfig = corner.corner(samples2D, labels=model.param_names,
+	cfig = corner.corner(samples2D, bins=100, labels=model.param_names,
 					truths=true_params, quantiles=[0.16,0.5,0.84])
 	cfig.savefig(path.join(outdir,"obj_{:03d}_corner.png".format(i)))
 	cfig.clf()

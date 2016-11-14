@@ -133,7 +133,7 @@ class sersic(am.FittableModel):
 
 	logI  = am.Parameter(default=1.,min=-LOGI_LIMIT,max=LOGI_LIMIT)
 	alpha = am.Parameter(default=5.)
-	index = am.Parameter(default=0.5,min=0.01,max=10.)
+	index = am.Parameter(default=0.5,min=0.1,max=10.)
 	E1 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
 	E2 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
 	
@@ -164,6 +164,66 @@ class sersic(am.FittableModel):
 		beta *= np.exp(-1j*pa)
 		r = np.sqrt((beta.real/a)**2 + (beta.imag/b)**2)
 		img = amp*np.exp(-np.power(r,1./index))
+		out = img * 0.0
+		
+		if np.any(np.isnan(psf)):
+			out = img
+		elif psf is None:
+			out = img
+		else:
+			if len(psf.shape) == 2:
+				out = cfft(img,psf)
+		
+		## WINDOW THE IMAGE 
+		return window_image(out)
+
+class sersic_flipped(am.FittableModel):
+	"""
+		This class implements an elliptical Sersic source plane model profile.
+		Parameters included:
+			logI	- peak surface brightness
+			alpha	- size = sqrt(ab) = a*sqrt(E)
+			invindex- inverse Sersic index (2.0 = Gaussian)
+			E1		- + polarized ellipticity
+			E2		- x polarized ellipticity
+		We also implement a PSF convolution as well.
+	"""
+	inputs = ('x','y','psf',)
+	outputs = ('img',)
+
+	logI  = am.Parameter(default=1.,min=-LOGI_LIMIT,max=LOGI_LIMIT)
+	alpha = am.Parameter(default=5.)
+	invindex = am.Parameter(default=0.5,min=0.1,max=10.)
+	E1 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
+	E2 = 	am.Parameter(default=0.,min=-E_LIMIT,max=E_LIMIT)
+	
+	standard_broadcasting = False
+		
+	@staticmethod
+	def evaluate(x,y,psf,
+				 logI,alpha,invindex,E1,E2):	
+				
+		amp = np.power(10.,logI)	# Peak amplitude
+		
+		# Ensure ellipticities don't get out of whack
+		emag=np.sqrt(E1**2+E2**2)
+		if emag > 1:
+			E1/=(emag+1e-3)
+			E2/=(emag+1e-3)
+		
+		# Ellipse parameters
+		ellipse = convert_epars([alpha,E1,E2],pol_to_ae=True)
+		
+		a = ellipse[0]
+		b = ellipse[0]*ellipse[1]
+		pa = ellipse[2]
+						
+		# Now for the model:
+		beta = x+1j*y
+		
+		beta *= np.exp(-1j*pa)
+		r = np.sqrt((beta.real/a)**2 + (beta.imag/b)**2)
+		img = amp*np.exp(-np.power(r,invindex))
 		out = img * 0.0
 		
 		if np.any(np.isnan(psf)):
@@ -249,12 +309,16 @@ class AIMSimplexLSQFitter(am.fitting.SimplexLSQFitter):
 
 ################# METHODS ###########################
 
-def get_AIM(fixed=False):
+def get_AIM(fixed=False,flipped=False):
 	"""
 		Return a lensed Sersic model object.
 	"""
 	
-	profile=sersic
+	if flipped:
+		profile=sersic_flipped
+	else:
+		profile=sersic
+	
 	if fixed:
 		distortion=lens_equation_fixed
 	else:
