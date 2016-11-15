@@ -22,14 +22,14 @@ logI_rng = (0.5,2)	# uniform
 index_rng=(0.2,5)	# uniform
 noise_sig = 1.		# normal
 
-sample_size=500
-break_size =50
+sample_size=100
+break_size =10
 
 dims = (75,75)
 x,y =np.meshgrid(np.linspace(-(dims[0]-1)/2,(dims[0]-1)/2,dims[0]),
                  np.linspace(-(dims[1]-1)/2,(dims[1]-1)/2,dims[1]))
 p=None
-model = aimflex.get_AIM(flipped=True)
+model = aimflex.get_AIM(gaussian=True)
 
 E = np.random.randn(sample_size,2)*e_sigma
 A = np.random.uniform(*alpha_rng,size=sample_size)
