@@ -4,7 +4,7 @@ import matplotlib.pyplot as pl
 from astropy.table import Table,hstack
 from os import path
 
-datadir='../../flexion_development/val_out_20161111/'
+datadir='../../flexion_development/val_out_20161116/'
 
 true=Table.read(path.join(datadir,'input_data_master.txt'),format='ascii.fixed_width')
 fit=Table.read(path.join(datadir,'output_data_master.txt'),format='ascii.fixed_width')
@@ -23,7 +23,7 @@ nc=4
 ns=100
 samp = np.random.randint(0,true[shapep[0]].size,ns)
 n=np.arange(ns)
-#samp=np.arange(true[shapep[0]].size)
+samp=np.arange(true[shapep[0]].size)
 
 
 lim=[1,1,1,1,0.1,0.1,0.1,0.1]
@@ -61,8 +61,9 @@ for i,ip in enumerate(shapep):
 # 		axes[k//2,k%2].scatter(fit[ip+'_stdev'][samp],fit[op][samp]-true[ip][samp],marker='.')	
 # 		axes[k//2,k%2].set_xlabel(ip+'_stdev')
 
-		axes[k//2,k%2].scatter(fit['alpha_2'+tag][samp],fit[op][samp]-true[ip][samp],marker='x')
-		axes[k//2,k%2].set_ylabel(op+' - '+ip)
+		axes[k//2,k%2].scatter(fit['alpha_2'+tag][samp],(fit[op][samp]-true[ip][samp])/fit[ip+'_stdev'][samp],marker='x')
+		axes[k//2,k%2].set_ylabel(op+' - '+ip+'/sigma')
+
 		axes[k//2,k%2].set_ylim((lim[i],-lim[i]))
 
 # 	pl.show()

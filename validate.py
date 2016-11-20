@@ -1,13 +1,16 @@
 import aimflex
 import corner
+import sep
+import datetime
+import sys
+
 import numpy as np
 import matplotlib.pyplot as pl
+
 from matplotlib.ticker import MaxNLocator
 from astropy.io import fits
 from astropy.table import Table,hstack
 from os import path
-import datetime
-import sys
 
 if len(sys.argv)<2:
 	outdir = '../../flexion_development/val_out'
@@ -17,19 +20,23 @@ else:
 
 field_data_raw = Table.read('true_fields.txt',format='ascii.fixed_width')
 e_sigma = 0.2		# normal
-alpha_rng = (2,15)	# uniform
+alpha_rng = (5,15)	# uniform
 logI_rng = (0.5,2)	# uniform
 index_rng=(0.2,5)	# uniform
 noise_sig = 1.		# normal
 
+cut_factor=3.0		# multiples of measured, lensed semimajor axis size
+
 sample_size=100
 break_size =10
 
-dims = (75,75)
+dims = (201,201)
 x,y =np.meshgrid(np.linspace(-(dims[0]-1)/2,(dims[0]-1)/2,dims[0]),
                  np.linspace(-(dims[1]-1)/2,(dims[1]-1)/2,dims[1]))
 p=None
-model = aimflex.get_AIM(gaussian=True)
+inmodel = aimflex.get_aim(flipped=True)
+outmodel= aimflex.get_aim(gaussian=True)
+parmask = [pn in outmodel.param_names for pn in inmodel.param_names]
 
 E = np.random.randn(sample_size,2)*e_sigma
 A = np.random.uniform(*alpha_rng,size=sample_size)
@@ -42,22 +49,24 @@ sample = np.sort(np.random.randint(0,len(field_data_raw),sample_size))
 # Tables to save data into
 obj_tbl = Table(names=['objnum','sample_point'],dtype=('i4','i4',))
 
-input_pars = Table(names=model.param_names)
+input_pars = Table(names=inmodel.param_names)
 
-best_pars = Table(names=[pn+'_best'for pn in model.param_names])
-mean_pars = Table(names=[pn+'_mean'for pn in model.param_names])
-median_pars = Table(names=[pn+'_median'for pn in model.param_names])
-mode_pars = Table(names=[pn+'_mode'for pn in model.param_names])
+best_pars = Table(names=[pn+'_best'for pn in outmodel.param_names])
+mean_pars = Table(names=[pn+'_mean'for pn in outmodel.param_names])
+median_pars = Table(names=[pn+'_median'for pn in outmodel.param_names])
+mode_pars = Table(names=[pn+'_mode'for pn in outmodel.param_names])
 
 
-upper_error = Table(names=[pn+'_err_up'for pn in model.param_names])
-lower_error = Table(names=[pn+'_err_lo'for pn in model.param_names])
-sigma_error = Table(names=[pn+'_stdev'for pn in model.param_names])
+upper_error = Table(names=[pn+'_err_up'for pn in outmodel.param_names])
+lower_error = Table(names=[pn+'_err_lo'for pn in outmodel.param_names])
+sigma_error = Table(names=[pn+'_stdev'for pn in outmodel.param_names])
 
 # correlation = Table(names=['correlation_matrix'])
-lsq = Table(names=['lsq_value'])
+lsq = Table(names=['lsq_best'])
+rdata = Table(names=['r_data'])
 
-for i,s in enumerate(sample):
+i=0
+for s in sample:
 	print i,datetime.datetime.now()
 	if (i % break_size) == 0 and i>1:
 		input_data = hstack([obj_tbl,input_pars])
@@ -70,103 +79,135 @@ for i,s in enumerate(sample):
 						format='ascii.fixed_width')
 
 
-	model.c1_0 = 0.
-	model.c2_0 = 0.
+	inmodel.c1_0 = 0.
+	inmodel.c2_0 = 0.
 
-	model.E1_2 = E[i,0]
-	model.E2_2 = E[i,1]
-	model.alpha_2 = A[i]
-	model.logI_2 = logI[i]
-# 	model.index_2 = index[i]
-	model.invindex_2 = index[i]
+	inmodel.E1_2 = E[i,0]
+	inmodel.E2_2 = E[i,1]
+	inmodel.alpha_2 = A[i]
+	inmodel.logI_2 = logI[i]
+# 	inmodel.index_2 = index[i]
+	inmodel.invindex_2 = index[i]
 	
-	model.g1_0 = field_data_raw['g1'][s]
-	model.g2_0 = field_data_raw['g2'][s]
-	model.F1_0 = field_data_raw['F1'][s]
-	model.F2_0 = field_data_raw['F2'][s]
-	model.G1_0 = field_data_raw['G1'][s]
-	model.G2_0 = field_data_raw['G2'][s]
+	inmodel.g1_0 = field_data_raw['g1'][s]
+	inmodel.g2_0 = field_data_raw['g2'][s]
+	inmodel.F1_0 = field_data_raw['F1'][s]
+	inmodel.F2_0 = field_data_raw['F2'][s]
+	inmodel.G1_0 = field_data_raw['G1'][s]
+	inmodel.G2_0 = field_data_raw['G2'][s]
 	
-	true_params = np.copy(model.parameters)
-	
-	true = model(x,y,p)
+	true = inmodel(x,y,p)
 	data = true + aimflex.window_image(np.random.randn(*(true.shape)))
-	weights = np.ones(true.shape)
+	weights = aimflex.window_image(np.ones(true.shape)) # Noise RMS for each pixel...
 
-	aimflex.set_gaussian_pars(data,model,weights=weights)
-	aimflex.set_limits(data,model)
-
-	### FITTING
+	### Select only the main image from the generated data image and window down.
 	###
-	samples, chisqs = aimflex.fit_image(model,data,weights,p,verbose=False)
-	samples2D=samples.reshape((-1, model.parameters.size))
-
-	# corner figure
-	cfig = corner.corner(samples2D, bins=100, labels=model.param_names,
-					truths=true_params, quantiles=[0.16,0.5,0.84])
-	cfig.savefig(path.join(outdir,"obj_{:03d}_corner.png".format(i)))
-	cfig.clf()
+	objects = sep.extract(data, 1.5, err=weights)
 	
-	# results to save
-	stats = aimflex.sample_stats(samples2D)
-	best = np.unravel_index(np.argmin(chisqs),chisqs.shape)
+	if len(objects) > 0:
 	
-	fit_pars = samples[best]
-	chisq = chisqs[best]
+		main = np.argmax(objects['flux']) # Pick the bright one
+		r=(cut_factor*objects['a'][main]).astype(int)
+		xc,yc=objects['x'][main].astype(int), objects['y'][main].astype(int)
+		if xc-r < 0:
+			r=np.copy(xc)
+		if xc+r > data.shape[0]:
+			r=data.shape[0] - xc
+		if yc-r < 0:
+			r=np.copy(yc)
+		if yc+r > data.shape[1]:
+			r=data.shape[1] - yc
 	
-	model.parameters = fit_pars
+		print xc,yc," --- ",r
+		print data.shape
+		data=aimflex.cut_stamp(data,xc,yc,r)
+		true=aimflex.cut_stamp(true,xc,yc,r)
+		weights=aimflex.cut_stamp(weights,xc,yc,r)
+		print data.shape
 	
-	outimg = model(x,y,p)
+		objdims = data.shape
+		xobj,yobj =np.meshgrid(np.linspace(-(objdims[0]-1)/2,(objdims[0]-1)/2,objdims[0]),
+							   np.linspace(-(objdims[1]-1)/2,(objdims[1]-1)/2,objdims[1]))
 
-	# Image plots
-	f, axarr = pl.subplots(2,2)
-	axarr[0,0].imshow(data)
-	axarr[0,1].imshow(true)
-	axarr[1,0].imshow(outimg)
-	axarr[1,1].imshow(data-outimg)
+		# log the offset in the center position
+		inmodel.c1_0=xc-dims[0]
+		inmodel.c2_0=yc-dims[1]
+		true_params = np.copy(inmodel.parameters)
 
-	axarr[0,0].set_title('Data')
-	axarr[0,1].set_title('Input')
-	axarr[1,0].set_title('Output')
-	axarr[1,1].set_title('Residual')
+		### FITTING
+		###
+		aimflex.set_limits(data,outmodel)
+		samples, chisqs = aimflex.fit_image(outmodel,data,weights,p,verbose=False)
+		samples2D=samples.reshape((-1, outmodel.parameters.size))
 
-	f.savefig(path.join(outdir,"obj_{:03d}_images.png".format(i)))
-	f.clf()
+		# corner figure
+		cfig = corner.corner(samples2D, bins=100, labels=outmodel.param_names,
+						truths=np.compress(parmask,true_params), quantiles=[0.16,0.5,0.84])
+		cfig.savefig(path.join(outdir,"obj_{:03d}_corner.png".format(i)))
+		cfig.clf()
 	
-	# Parameter track plots
-	fig, axes = pl.subplots(model.parameters.size, 1, sharex=True, figsize=(8, 20))
-
-	for k in range(model.parameters.size):
-		axes[k].plot(samples2D[:, k].T, color="k", alpha=0.4)
-		axes[k].yaxis.set_major_locator(MaxNLocator(5))
-		axes[k].axhline(true_params[k], color="b", lw=2)
-		axes[k].set_ylabel(model.param_names[k])
-
-	fig.tight_layout(h_pad=0.0)
-	fig.savefig(path.join(outdir,"obj_{:03d}_pars.png".format(i)))
-	fig.clf()
+		# results to save
+		stats = aimflex.sample_stats(samples2D)
+		best = np.unravel_index(np.argmin(chisqs),chisqs.shape)
 	
-	del fig, cfig, f
-
-	# Output
-	obj_tbl.add_row([i,s])
+		fit_pars = samples[best]
+		chisq = chisqs[best]
 	
-	input_pars.add_row(true_params)
-	best_pars.add_row(fit_pars)
-	mean_pars.add_row(stats[0])
-	median_pars.add_row(stats[2][1])
-	mode_pars.add_row(stats[3])
+		outmodel.parameters = fit_pars
 	
-	sigma_error.add_row(stats[1])
-	upper_error.add_row(stats[2][2] - stats[2][1])
-	lower_error.add_row(stats[2][2] - stats[2][1])
+		outimg = outmodel(xobj,yobj,p)
+
+		# Image plots
+		f, axarr = pl.subplots(2,2)
+		axarr[0,0].imshow(data)
+		axarr[0,1].imshow(true)
+		axarr[1,0].imshow(outimg)
+		axarr[1,1].imshow(data-outimg)
+
+		axarr[0,0].set_title('Data')
+		axarr[0,1].set_title('Input')
+		axarr[1,0].set_title('Output')
+		axarr[1,1].set_title('Residual')
+
+		f.savefig(path.join(outdir,"obj_{:03d}_images.png".format(i)))
+		f.clf()
 	
-# 	correlation.add_row([stats[3]])
+		# Parameter track plots
+		fig, axes = pl.subplots(outmodel.parameters.size, 1, sharex=True, figsize=(8, 20))
 
-	lsq.add_row([chisq])
+		for k in range(outmodel.parameters.size):
+			axes[k].plot(samples2D[:, k].T, color="k", alpha=0.4)
+			axes[k].yaxis.set_major_locator(MaxNLocator(5))
+			axes[k].axhline(np.compress(parmask,true_params)[k], color="b", lw=2)
+			axes[k].set_ylabel(outmodel.param_names[k])
+
+		fig.tight_layout(h_pad=0.0)
+		fig.savefig(path.join(outdir,"obj_{:03d}_pars.png".format(i)))
+		fig.clf()
+	
+		del fig, cfig, f
+
+		# Output
+		obj_tbl.add_row([i,s])
+	
+		input_pars.add_row(true_params)
+		best_pars.add_row(fit_pars)
+		mean_pars.add_row(stats[0])
+		median_pars.add_row(stats[2][1])
+		mode_pars.add_row(stats[3])
+	
+		sigma_error.add_row(stats[1])
+		upper_error.add_row(stats[2][2] - stats[2][1])
+		lower_error.add_row(stats[2][2] - stats[2][1])
+	
+	# 	correlation.add_row([stats[3]])
+
+		lsq.add_row([chisq])
+		rdata.add_row([r])
 
 
-	pl.close("all")
+		pl.close("all")
+		i+=1
 
 # Final results
 input_data = hstack([obj_tbl,input_pars])

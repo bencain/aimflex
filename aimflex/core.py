@@ -23,7 +23,7 @@ F_LIMIT = 0.5		# 1-flexion magnitude limit
 G_LIMIT = 0.5		# 3-flexion magnitude limit
 ################# CLASSES ###########################
 
-class lens_equation(am.FittableModel):
+class aim_lens_equation(am.FittableModel):
 	"""
 		This class implements a quadratic local lens distortion with
 		reduced shear, and flexion as inputs.  Parameters are
@@ -72,7 +72,7 @@ class lens_equation(am.FittableModel):
 		return beta.real,beta.imag
 
 
-class lens_equation_fixed(am.FittableModel):
+class aim_lens_equation_fixed(am.FittableModel):
 	"""
 		This class implements a quadratic local lens distortion with
 		reduced shear, and flexion as inputs.  Parameters are
@@ -117,7 +117,7 @@ class lens_equation_fixed(am.FittableModel):
 
 		return beta.real,beta.imag
 
-class sersic(am.FittableModel):
+class aim_sersic(am.FittableModel):
 	"""
 		This class implements an elliptical Sersic source plane model profile.
 		Parameters included:
@@ -141,7 +141,7 @@ class sersic(am.FittableModel):
 		
 	@staticmethod
 	def evaluate(x,y,psf,
-				 logI,alpha,index,E1,E2):	
+				 logI,alpha,index,E1,E2):
 				
 		amp = np.power(10.,logI)	# Peak amplitude
 		
@@ -177,7 +177,7 @@ class sersic(am.FittableModel):
 		## WINDOW THE IMAGE 
 		return window_image(out)
 
-class sersic_flipped(am.FittableModel):
+class aim_sersic_flipped(am.FittableModel):
 	"""
 		This class implements an elliptical Sersic source plane model profile.
 		Parameters included:
@@ -369,7 +369,7 @@ class AIMSimplexLSQFitter(am.fitting.SimplexLSQFitter):
 
 ################# METHODS ###########################
 
-def get_AIM(fixed=False,flipped=False,gaussian=False):
+def get_aim(fixed=False,flipped=False,gaussian=False):
 	"""
 		Return a lensed Sersic model object.
 	"""
@@ -378,14 +378,14 @@ def get_AIM(fixed=False,flipped=False,gaussian=False):
 	if gaussian:
 		profile=aim_gaussian
 	elif flipped:
-		profile=sersic_flipped
+		profile=aim_sersic_flipped
 	else:
-		profile=sersic
+		profile=aim_sersic
 	
 	if fixed:
-		distortion=lens_equation_fixed
+		distortion=aim_lens_equation_fixed
 	else:
-		distortion=lens_equation
+		distortion=aim_lens_equation
 	return (distortion() & Identity(1)) | profile()
 
 
